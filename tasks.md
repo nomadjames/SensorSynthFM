@@ -8,7 +8,8 @@ Always pick ONE task to work on. Do not try to do multiple things at once.
 ## Current Sprint: Foundation
 
 ### Next Up
-- [ ] Session 1: Add AudioKit as a Swift Package dependency to the Xcode project
+- [x] Session 1: Add AudioKit as a Swift Package dependency to the Xcode project — DONE
+- [ ] Session 1: Create AudioEngine.swift — minimal audio engine wrapper
 - [ ] Session 1: Create a minimal view that plays a sine wave when you tap a button
 - [ ] Session 1: Build and run on iPad or simulator — confirm sound works
 - [ ] Session 1: Make first meaningful git commit after sound works
@@ -78,10 +79,17 @@ Always pick ONE task to work on. Do not try to do multiple things at once.
 - [x] Set up landscape preview orientation
 - [x] Created project documentation (.md files)
 - [x] Set up .gitignore
+- [x] GitHub repo created and pushed: github.com/nomadjames/SensorSynthFM
+- [x] README.md written for GitHub
+- [x] SensorManager.swift written (Antigravity), reviewed and patched (FFT memory leak fix, mic permission added)
+- [x] AudioKit added as Swift Package dependency
+- [x] Medium article outline and first draft created
+- [x] Workflow plan document created (tool allocation across Claude, Antigravity, Max/MSP, Gemini)
 
 ---
 
 ## Session Notes
 (Write one sentence here at the end of each session about what to do next)
 
-Feb 2026: Mockups complete. Next: add AudioKit and get first sound out of the app.
+Feb 2026 Session 1: Mockups complete. Next: add AudioKit and get first sound out of the app.
+Feb 2026 Session 2: GitHub connected, SensorManager written by Antigravity and patched, AudioKit added. Next: write AudioEngine.swift, then build a sine wave test view.

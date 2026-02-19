@@ -11,7 +11,7 @@ import SwiftUI
 struct SensorSynthFMApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SineTestView() // TODO: Switch back to ContentView() after audio is confirmed
         }
     }
 }
