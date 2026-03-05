@@ -56,6 +56,18 @@ These rules must never be violated. Flag any violation immediately.
 - design_guidelines.md — visual design language
 - tasks.md          — current sprint tasks (check this first)
 - audio_bugs.md     — running log of audio issues
+- workflow.md       — tool allocation across Claude, Gemini, Xcode Agent
+
+## Multi-Tool Context
+This project uses multiple AI tools. You (Claude Agent in Xcode) handle
+implementation: writing Swift code, building, testing, and verifying previews.
+Gemini 3.1 Pro (via Antigravity) handles large-context research and design review.
+Claude in Cowork handles project documentation and orchestration.
+
+If you encounter an architectural decision that needs broader context (e.g.,
+choosing between AudioKit approaches, or UI design patterns), flag it for
+the developer rather than making the call alone. The developer may want to
+consult Gemini or Cowork before proceeding.
 
 ## Lessons Learned
 (This section grows as we work — add entries here when mistakes are made)
