@@ -15,9 +15,9 @@ Always pick ONE task to work on. Do not try to do multiple things at once.
 - [x] Session 1: Commit and push to GitHub — DONE
 
 ### After Sound Works
-- [ ] Session 2: Replace sine wave with AudioKit FMOscillator
-- [ ] Session 2: Add sliders for carrier frequency, modulator frequency, modulation index, amplitude
-- [ ] Session 2: Confirm real-time FM timbral changes with sliders
+- [x] Session 2: Replace sine wave with AudioKit FMOscillator — DONE (FMEngine.swift)
+- [x] Session 2: Add sliders for carrier frequency, modulator frequency, modulation index, amplitude — DONE (FMTestView.swift)
+- [ ] Session 2: Confirm real-time FM timbral changes with sliders — needs build/run on Mac
 
 ### Sensor Foundation
 - [ ] Session 3: Add CoreMotion accelerometer reading — display raw values on screen
@@ -95,3 +95,4 @@ Feb 2026 Session 1: Mockups complete. Next: add AudioKit and get first sound out
 Feb 2026 Session 2: GitHub connected, SensorManager written by Antigravity and patched, AudioKit added. Next: write AudioEngine.swift, then build a sine wave test view.
 Feb 2026 Session 3: AudioEngine.swift written using native AVAudioEngine (not AudioKit — had linking issues). Sine wave test working on simulator. Next: replace sine wave with FM oscillator (Session 2 tasks in sprint).
 Feb 19 2026 Session 4: Upgraded to macOS Tahoe + Xcode 26.3. Set up Claude Agent in Xcode (signed in). Confirmed Gemini 3.1 Pro access via Antigravity and AI Studio. Created workflow.md (tool allocation plan). Updated CLAUDE.md with multi-tool context. Next: Session 2 FM oscillator tasks, routed through Xcode Claude Agent.
+Mar 27 2026 Session 5: Created FMEngine.swift (AudioKit FMOscillator replacing AVAudioEngine sine wave) and FMTestView.swift (landscape split-panel UI with sliders for carrier freq, mod ratio, mod index, amplitude). Updated SensorSynthFMApp entry point to FMTestView. Next: git pull on Mac, build, confirm FM sound and real-time slider control, then mark final Session 2 task complete.
