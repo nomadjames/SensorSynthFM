@@ -20,9 +20,9 @@ Always pick ONE task to work on. Do not try to do multiple things at once.
 - [ ] Session 2: Confirm real-time FM timbral changes with sliders — needs build/run on Mac
 
 ### Sensor Foundation
-- [ ] Session 3: Add CoreMotion accelerometer reading — display raw values on screen
-- [ ] Session 3: Route accelerometer magnitude to FM modulation index
-- [ ] Session 3: Test: tap table and hear timbre change
+- [x] Session 3 (prepped Mar 31 2026): SensorFMBridge.swift created — routes accel magnitude → modulationIndex, mic amplitude → amplitude, gyroY → modulatorRatio. IIR smoothing per mapping, all audio-thread safe.
+- [x] Session 3 (prepped Mar 31 2026): SensorFMTestView.swift created — live sensor bars, mapped-value readouts, per-mapping enable toggles, raw sensor panel, FM sliders and play/stop. Landscape dark theme.
+- [ ] Session 3: git pull on Mac, add both files to Xcode target, build and run — confirm sensor values appear and tapping the table changes timbre.
 
 - [ ] Session 4: Add Vision framework optical flow from front camera
 - [ ] Session 4: Display motion magnitude on screen
@@ -96,3 +96,4 @@ Feb 2026 Session 2: GitHub connected, SensorManager written by Antigravity and p
 Feb 2026 Session 3: AudioEngine.swift written using native AVAudioEngine (not AudioKit — had linking issues). Sine wave test working on simulator. Next: replace sine wave with FM oscillator (Session 2 tasks in sprint).
 Feb 19 2026 Session 4: Upgraded to macOS Tahoe + Xcode 26.3. Set up Claude Agent in Xcode (signed in). Confirmed Gemini 3.1 Pro access via Antigravity and AI Studio. Created workflow.md (tool allocation plan). Updated CLAUDE.md with multi-tool context. Next: Session 2 FM oscillator tasks, routed through Xcode Claude Agent.
 Mar 27 2026 Session 5: Created FMEngine.swift (AudioKit FMOscillator replacing AVAudioEngine sine wave) and FMTestView.swift (landscape split-panel UI with sliders for carrier freq, mod ratio, mod index, amplitude). Updated SensorSynthFMApp entry point to FMTestView. Next: git pull on Mac, build, confirm FM sound and real-time slider control, then mark final Session 2 task complete.
+Mar 31 2026 Session 6 (Vera — remote prep): Created SensorFMBridge.swift (sensor-to-FM routing with IIR smoothing, per-mapping toggles, audio-thread safe) and SensorFMTestView.swift (split-panel: sensor readouts + FM controls). Ready for build test on Mac. Next: git pull, add both files to Xcode target, swap SensorFMTestView into SensorSynthFMApp.swift, build and run, tap table and confirm timbre change.
