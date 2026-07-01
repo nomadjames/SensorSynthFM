@@ -10,6 +10,7 @@
 // backed by AUParameter and are audio-thread safe.
 
 import AudioKit
+import SoundpipeAudioKit
 import AVFoundation
 import Foundation
 

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		F8BB0DBA2F4727A4003ACB78 /* AudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = F8BB0DB92F4727A4003ACB78 /* AudioKit */; };
+		F8C818062FF59F7E0094AFF3 /* SoundpipeAudioKit in Frameworks */ = {isa = PBXBuildFile; productRef = F8C818052FF59F7E0094AFF3 /* SoundpipeAudioKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F8C818062FF59F7E0094AFF3 /* SoundpipeAudioKit in Frameworks */,
 				F8BB0DBA2F4727A4003ACB78 /* AudioKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -126,6 +128,7 @@
 			name = SensorSynthFM;
 			packageProductDependencies = (
 				F8BB0DB92F4727A4003ACB78 /* AudioKit */,
+				F8C818052FF59F7E0094AFF3 /* SoundpipeAudioKit */,
 			);
 			productName = SensorSynthFM;
 			productReference = F87B42372F4368B50095573D /* SensorSynthFM.app */;
@@ -211,6 +214,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F8BB0DB32F4722E3003ACB78 /* XCRemoteSwiftPackageReference "AudioKit" */,
+				F8C818042FF59E510094AFF3 /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F87B42382F4368B50095573D /* Products */;
@@ -603,6 +607,14 @@
 				minimumVersion = 5.6.5;
 			};
 		};
+		F8C818042FF59E510094AFF3 /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/AudioKit/SoundpipeAudioKit";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.7.4;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -610,6 +622,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = F8BB0DB32F4722E3003ACB78 /* XCRemoteSwiftPackageReference "AudioKit" */;
 			productName = AudioKit;
+		};
+		F8C818052FF59F7E0094AFF3 /* SoundpipeAudioKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F8C818042FF59E510094AFF3 /* XCRemoteSwiftPackageReference "SoundpipeAudioKit" */;
+			productName = SoundpipeAudioKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
