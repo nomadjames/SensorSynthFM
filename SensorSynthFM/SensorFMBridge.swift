@@ -150,8 +150,8 @@ final class SensorFMBridge {
                                new: rawAccelMag,
                                alpha: accelSmoothingAlpha)
 
+        mappedModIndex = scale(smoothedAccelMag, to: modIndexRange)
         if accelToModIndexEnabled {
-            mappedModIndex = scale(smoothedAccelMag, to: modIndexRange)
             engine.modulationIndex = mappedModIndex
         }
 
@@ -161,8 +161,8 @@ final class SensorFMBridge {
                              new: rawMic,
                              alpha: micSmoothingAlpha)
 
+        mappedAmplitude = scale(smoothedMicAmp, to: amplitudeRange)
         if micToAmplitudeEnabled {
-            mappedAmplitude = scale(smoothedMicAmp, to: amplitudeRange)
             engine.amplitude = mappedAmplitude
         }
 
@@ -173,8 +173,8 @@ final class SensorFMBridge {
                             new: rawGyroY,
                             alpha: gyroSmoothingAlpha)
 
+        mappedModRatio = scale(smoothedGyroY, to: modRatioRange)
         if gyroYToModRatioEnabled {
-            mappedModRatio = scale(smoothedGyroY, to: modRatioRange)
             engine.modulatorRatio = mappedModRatio
         }
     }

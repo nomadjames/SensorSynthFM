@@ -28,10 +28,23 @@ final class SensorManager {
 
     // MARK: Microphone (0.0–1.0)
 
+    private(set) var micRawAmplitude: Double = 0.0
     private(set) var micAmplitude: Double = 0.0
+    private(set) var micNoiseFloor: Double = 0.0
+    private(set) var micPeakHold: Double = 0.0
+    private(set) var micLastFrameCount: Double = 0.0
     private(set) var micLow: Double = 0.0
     private(set) var micMid: Double = 0.0
     private(set) var micHigh: Double = 0.0
+
+    private(set) var microphonePermissionGranted: Bool = false
+    private(set) var microphonePermissionStatus: String = "not checked"
+    private(set) var micSpectrumAvailable: Bool = false
+    private(set) var micDebugStatus: String = "idle"
+    private(set) var audioSessionCategory: String = "not set"
+    private(set) var audioSessionMode: String = "not set"
+    private(set) var audioSessionInputRoute: String = "none"
+    private(set) var audioSessionOutputRoute: String = "none"
 
     // MARK: - Private state
 
@@ -46,9 +59,12 @@ final class SensorManager {
     private let accelScale: Double = 4.0
     private let gyroScale: Double = 8.0
 
-    /// Envelope timing converted to per-sample coefficients (computed in start).
+    /// Envelope timing converted to 60 Hz display-timer coefficients.
     private var attackCoeff: Float = 0.0
     private var releaseCoeff: Float = 0.0
+    private let micGain: Double = 12.0
+    private let micPeakDecay: Double = 0.96
+    private let displayInterval: TimeInterval = 1.0 / 60.0
 
     /// Pre-allocated FFT scratch buffers (set once in start, never re-allocated).
     private var fftRealBuffer: UnsafeMutablePointer<Float>?
@@ -62,11 +78,13 @@ final class SensorManager {
     private var atomicLow: UnsafeMutablePointer<Float>?
     private var atomicMid: UnsafeMutablePointer<Float>?
     private var atomicHigh: UnsafeMutablePointer<Float>?
+    private var atomicTapFrames: UnsafeMutablePointer<Float>?
 
     /// Display-link timer to pull values off the audio thread.
     private var displayTimer: Timer?
+    private var inputTapInstalled = false
 
-    /// Envelope state (main-thread only).
+    /// Envelope state (main-thread only, raw input before gain/noise-floor).
     private var envelopeRMS: Double = 0.0
     private var envelopeLow: Double = 0.0
     private var envelopeMid: Double = 0.0
@@ -76,9 +94,15 @@ final class SensorManager {
 
     func start() {
         startMotion()
-        requestMicrophonePermission { [weak self] granted in
-            guard granted else { return }
+        micDebugStatus = "checking permission"
+        requestMicrophonePermission { [weak self] granted, status in
             DispatchQueue.main.async {
+                self?.microphonePermissionGranted = granted
+                self?.microphonePermissionStatus = status
+                guard granted else {
+                    self?.micDebugStatus = "permission \(status)"
+                    return
+                }
                 self?.startAudio()
             }
         }
@@ -147,29 +171,42 @@ final class SensorManager {
 
     // MARK: - Microphone ---------------------------------------------------
 
-    private func requestMicrophonePermission(completion: @escaping (Bool) -> Void) {
+    private func requestMicrophonePermission(completion: @escaping (Bool, String) -> Void) {
         switch AVAudioApplication.shared.recordPermission {
         case .granted:
-            completion(true)
+            completion(true, "granted")
         case .denied:
-            completion(false)
+            completion(false, "denied")
         case .undetermined:
+            microphonePermissionStatus = "asking"
             AVAudioApplication.requestRecordPermission { granted in
-                completion(granted)
+                completion(granted, granted ? "granted" : "denied")
             }
         @unknown default:
-            completion(false)
+            completion(false, "unknown")
         }
     }
 
     private func startAudio() {
+        guard !audioEngine.isRunning else { return }
+
         let session = AVAudioSession.sharedInstance()
+        micDebugStatus = "configuring session"
         do {
             try session.setCategory(.playAndRecord, mode: .measurement,
                                     options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
+            updateAudioSessionDebug(session)
         } catch {
-            return // fail silently
+            micSpectrumAvailable = false
+            micDebugStatus = "session error: \(error.localizedDescription)"
+            return
+        }
+
+        guard session.isInputAvailable else {
+            micSpectrumAvailable = false
+            micDebugStatus = "no audio input route"
+            return
         }
 
         let inputNode = audioEngine.inputNode
@@ -178,12 +215,12 @@ final class SensorManager {
         let bufferSize: AVAudioFrameCount = 512
 
         // --- Envelope coefficients ---
-        // attack  = 1 - exp(-1 / (sampleRate * seconds))
-        // release = 1 - exp(-1 / (sampleRate * seconds))
+        // These are applied by the 60 Hz display timer, not per audio sample.
         let attackTime: Float = 0.030   // 30 ms
         let releaseTime: Float = 0.150  // 150 ms
-        attackCoeff  = 1.0 - expf(-1.0 / (sampleRate * attackTime))
-        releaseCoeff = 1.0 - expf(-1.0 / (sampleRate * releaseTime))
+        let timerStep = Float(displayInterval)
+        attackCoeff  = 1.0 - expf(-timerStep / attackTime)
+        releaseCoeff = 1.0 - expf(-timerStep / releaseTime)
 
         // --- Allocate atomic float pointers (once) ---
         allocateAtomicBuffers()
@@ -206,6 +243,7 @@ final class SensorManager {
         let aLow     = atomicLow!
         let aMid     = atomicMid!
         let aHigh    = atomicHigh!
+        let aTapFrames = atomicTapFrames!
         let sr       = sampleRate
 
         // Bin boundaries for frequency bands.
@@ -223,6 +261,7 @@ final class SensorManager {
                              format: hwFormat) { buffer, _ in
             guard let channelData = buffer.floatChannelData else { return }
             let frames = Int(buffer.frameLength)
+            aTapFrames.pointee = Float(frames)
             let samples = channelData[0]  // mono channel 0
 
             // 1. RMS amplitude
@@ -287,25 +326,34 @@ final class SensorManager {
             aMid.pointee  = norm(midEnergy,  max(midEnd - lowEnd, 1))
             aHigh.pointee = norm(highEnergy, max(halfLen - midEnd, 1))
         }
+        inputTapInstalled = true
 
         // --- Start engine ---
         do {
             try audioEngine.start()
         } catch {
-            return // fail silently
+            micSpectrumAvailable = false
+            micDebugStatus = "engine error: \(error.localizedDescription)"
+            inputNode.removeTap(onBus: 0)
+            inputTapInstalled = false
+            return
         }
+
+        micSpectrumAvailable = true
+        micDebugStatus = "tap running"
 
         // --- Timer to pull atomic values to main thread ---
         let atk = Double(attackCoeff)
         let rel = Double(releaseCoeff)
 
-        displayTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 60.0,
+        displayTimer = Timer.scheduledTimer(withTimeInterval: displayInterval,
                                             repeats: true) { [weak self] _ in
             guard let self else { return }
             let rawRMS  = Double(self.atomicRMS?.pointee ?? 0)
             let rawLow  = Double(self.atomicLow?.pointee ?? 0)
             let rawMid  = Double(self.atomicMid?.pointee ?? 0)
             let rawHigh = Double(self.atomicHigh?.pointee ?? 0)
+            let tapFrames = Double(self.atomicTapFrames?.pointee ?? 0)
 
             self.envelopeRMS  = Self.envelope(old: self.envelopeRMS,  new: rawRMS,
                                               attack: atk, release: rel)
@@ -316,7 +364,12 @@ final class SensorManager {
             self.envelopeHigh = Self.envelope(old: self.envelopeHigh, new: rawHigh,
                                               attack: atk, release: rel)
 
-            self.micAmplitude = self.envelopeRMS
+            self.micRawAmplitude = rawRMS
+            self.micLastFrameCount = tapFrames
+            self.micNoiseFloor = Self.noiseFloor(old: self.micNoiseFloor,
+                                                 new: self.envelopeRMS)
+            self.micAmplitude = min(max((self.envelopeRMS - self.micNoiseFloor) * self.micGain, 0), 1)
+            self.micPeakHold = max(self.micAmplitude, self.micPeakHold * self.micPeakDecay)
             self.micLow       = self.envelopeLow
             self.micMid       = self.envelopeMid
             self.micHigh      = self.envelopeHigh
@@ -327,8 +380,22 @@ final class SensorManager {
         displayTimer?.invalidate()
         displayTimer = nil
 
-        audioEngine.inputNode.removeTap(onBus: 0)
+        if inputTapInstalled {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            inputTapInstalled = false
+        }
         audioEngine.stop()
+
+        micSpectrumAvailable = false
+        micDebugStatus = "stopped"
+        micRawAmplitude = 0
+        micAmplitude = 0
+        micNoiseFloor = 0
+        micLastFrameCount = 0
+        micPeakHold = 0
+        micLow = 0
+        micMid = 0
+        micHigh = 0
 
         freeFFTBuffers()
 
@@ -336,6 +403,13 @@ final class SensorManager {
         envelopeLow  = 0
         envelopeMid  = 0
         envelopeHigh = 0
+    }
+
+    private func updateAudioSessionDebug(_ session: AVAudioSession) {
+        audioSessionCategory = session.category.rawValue
+        audioSessionMode = session.mode.rawValue
+        audioSessionInputRoute = session.currentRoute.inputs.map(\.portName).joined(separator: ", ")
+        audioSessionOutputRoute = session.currentRoute.outputs.map(\.portName).joined(separator: ", ")
     }
 
     // MARK: - Envelope helper
@@ -348,13 +422,21 @@ final class SensorManager {
         return old + coeff * (new - old)
     }
 
+    @inline(__always)
+    private static func noiseFloor(old: Double, new: Double) -> Double {
+        guard old > 0 else { return new }
+        let alpha = new < old ? 0.20 : 0.001
+        return old + alpha * (new - old)
+    }
+
     // MARK: - Atomic buffer management
 
     private func allocateAtomicBuffers() {
-        atomicRMS  = .allocate(capacity: 1); atomicRMS!.initialize(to: 0)
-        atomicLow  = .allocate(capacity: 1); atomicLow!.initialize(to: 0)
-        atomicMid  = .allocate(capacity: 1); atomicMid!.initialize(to: 0)
-        atomicHigh = .allocate(capacity: 1); atomicHigh!.initialize(to: 0)
+        if atomicRMS == nil { atomicRMS = .allocate(capacity: 1); atomicRMS!.initialize(to: 0) } else { atomicRMS!.pointee = 0 }
+        if atomicLow == nil { atomicLow = .allocate(capacity: 1); atomicLow!.initialize(to: 0) } else { atomicLow!.pointee = 0 }
+        if atomicMid == nil { atomicMid = .allocate(capacity: 1); atomicMid!.initialize(to: 0) } else { atomicMid!.pointee = 0 }
+        if atomicHigh == nil { atomicHigh = .allocate(capacity: 1); atomicHigh!.initialize(to: 0) } else { atomicHigh!.pointee = 0 }
+        if atomicTapFrames == nil { atomicTapFrames = .allocate(capacity: 1); atomicTapFrames!.initialize(to: 0) } else { atomicTapFrames!.pointee = 0 }
     }
 
     private func freeAtomicBuffers() {
@@ -362,6 +444,7 @@ final class SensorManager {
         atomicLow?.deinitialize(count: 1);  atomicLow?.deallocate();  atomicLow  = nil
         atomicMid?.deinitialize(count: 1);  atomicMid?.deallocate();  atomicMid  = nil
         atomicHigh?.deinitialize(count: 1); atomicHigh?.deallocate(); atomicHigh = nil
+        atomicTapFrames?.deinitialize(count: 1); atomicTapFrames?.deallocate(); atomicTapFrames = nil
     }
 
     private func freeFFTBuffers() {

@@ -16,6 +16,7 @@
 // To use this screen: swap SensorFMTestView() into SensorSynthFMApp.swift in
 // place of FMTestView(), or wire it to a tab/navigation stack later.
 
+import Foundation
 import SwiftUI
 
 // MARK: - SensorFMTestView
@@ -45,7 +46,7 @@ struct SensorFMTestView: View {
                             sensorLabel: "ACCEL MAGNITUDE",
                             sensorValue: bridge.smoothedAccelMag,
                             arrowLabel: "→  MOD INDEX",
-                            mappedValue: bridge.mappedModIndex,
+                            mappedValue: normalised(bridge.mappedModIndex, in: bridge.modIndexRange),
                             mappedUnit: String(format: "%.2f", bridge.mappedModIndex),
                             isEnabled: $bridge.accelToModIndexEnabled,
                             accentColor: SynthColors.accent,
@@ -62,7 +63,7 @@ struct SensorFMTestView: View {
                             sensorLabel: "MIC AMPLITUDE",
                             sensorValue: bridge.smoothedMicAmp,
                             arrowLabel: "→  AMPLITUDE",
-                            mappedValue: bridge.mappedAmplitude,
+                            mappedValue: normalised(bridge.mappedAmplitude, in: bridge.amplitudeRange),
                             mappedUnit: String(format: "%d%%", Int(bridge.mappedAmplitude * 100)),
                             isEnabled: $bridge.micToAmplitudeEnabled,
                             accentColor: SynthColors.sensorGreen,
@@ -72,6 +73,8 @@ struct SensorFMTestView: View {
                             }
                         )
 
+                        micDebugPanel
+
                         SynthColors.divider.opacity(0.4).frame(height: 0.5)
 
                         // Mapping 3: Gyroscope Y → Modulator Ratio
@@ -79,7 +82,7 @@ struct SensorFMTestView: View {
                             sensorLabel: "GYRO Y",
                             sensorValue: bridge.smoothedGyroY,
                             arrowLabel: "→  MOD RATIO",
-                            mappedValue: (bridge.mappedModRatio - 0.5) / (8.0 - 0.5), // normalise for bar
+                            mappedValue: normalised(bridge.mappedModRatio, in: bridge.modRatioRange),
                             mappedUnit: String(format: "%.2f:1", bridge.mappedModRatio),
                             isEnabled: $bridge.gyroYToModRatioEnabled,
                             accentColor: SynthColors.accentBlue,
@@ -150,7 +153,7 @@ struct SensorFMTestView: View {
                             step: 1,
                             displayValue: "\(Int(engine.carrierFrequency)) Hz",
                             color: SynthColors.accent,
-                            description: "Base pitch — manual control only"
+                            description: "MANUAL ONLY — no sensor mapping"
                         )
 
                         SynthColors.divider.opacity(0.4).frame(height: 0.5)
@@ -164,8 +167,12 @@ struct SensorFMTestView: View {
                                 step: 0.1,
                                 displayValue: String(format: "%.1f:1", engine.modulatorRatio),
                                 color: SynthColors.accentBlue,
-                                description: "← Driven by Gyro Y when mapping is ON"
+                                description: bridge.gyroYToModRatioEnabled
+                                    ? "SENSOR DRIVEN BY GYRO Y — switch mapping OFF for manual"
+                                    : "MANUAL — Gyro Y mapping OFF"
                             )
+                            .disabled(bridge.gyroYToModRatioEnabled)
+                            .opacity(bridge.gyroYToModRatioEnabled ? 0.55 : 1.0)
                             if bridge.gyroYToModRatioEnabled {
                                 sensorDrivenBadge
                             }
@@ -182,8 +189,12 @@ struct SensorFMTestView: View {
                                 step: 0.1,
                                 displayValue: String(format: "%.1f", engine.modulationIndex),
                                 color: SynthColors.accent,
-                                description: "← Driven by Accel magnitude when mapping is ON"
+                                description: bridge.accelToModIndexEnabled
+                                    ? "SENSOR DRIVEN BY ACCEL — switch mapping OFF for manual"
+                                    : "MANUAL — Accel mapping OFF"
                             )
+                            .disabled(bridge.accelToModIndexEnabled)
+                            .opacity(bridge.accelToModIndexEnabled ? 0.55 : 1.0)
                             if bridge.accelToModIndexEnabled {
                                 sensorDrivenBadge
                             }
@@ -200,8 +211,12 @@ struct SensorFMTestView: View {
                                 step: 0.01,
                                 displayValue: String(format: "%d%%", Int(engine.amplitude * 100)),
                                 color: SynthColors.sensorGreen,
-                                description: "← Driven by Mic amplitude when mapping is ON"
+                                description: bridge.micToAmplitudeEnabled
+                                    ? "SENSOR DRIVEN BY MIC — switch mapping OFF for manual"
+                                    : "MANUAL — Mic mapping OFF"
                             )
+                            .disabled(bridge.micToAmplitudeEnabled)
+                            .opacity(bridge.micToAmplitudeEnabled ? 0.55 : 1.0)
                             if bridge.micToAmplitudeEnabled {
                                 sensorDrivenBadge
                             }
@@ -214,12 +229,12 @@ struct SensorFMTestView: View {
             .frame(maxWidth: .infinity)
             .background(SynthColors.background)
         }
-        .background(SynthColors.background)
-        .ignoresSafeArea()
+        .background(SynthColors.background.ignoresSafeArea())
+        .safeAreaPadding(.top, 8)
         .preferredColorScheme(.dark)
         .onAppear {
-            engine.start()
             sensors.start()
+            engine.start(allowMicrophoneInput: true)
             bridge.start(sensors: sensors, engine: engine)
         }
         .onDisappear {
@@ -244,11 +259,36 @@ struct SensorFMTestView: View {
                 rawRow("GYRO  X", value: sensors.gyroX)
                 rawRow("GYRO  Y", value: sensors.gyroY)
                 rawRow("GYRO  Z", value: sensors.gyroZ)
-                rawRow("MIC RMS", value: sensors.micAmplitude)
+                rawRow("MIC RAW", value: sensors.micRawAmplitude)
+                rawRow("MIC LVL", value: sensors.micAmplitude)
                 rawRow("MIC LOW", value: sensors.micLow)
                 rawRow("MIC MID", value: sensors.micMid)
                 rawRow("MIC HI ", value: sensors.micHigh)
             }
+        }
+        .padding(10)
+        .background(SynthColors.surfaceRaised)
+        .cornerRadius(8)
+    }
+
+    private var micDebugPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("MIC INPUT DEBUG")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+
+            debugTextRow("PERMISSION", sensors.microphonePermissionStatus.uppercased())
+            debugTextRow("MIC ENGINE", sensors.micDebugStatus.uppercased())
+            rawRow("RAW RMS", value: sensors.micRawAmplitude)
+            rawRow("POST GAIN", value: sensors.micAmplitude)
+            rawRow("NOISE FLR", value: sensors.micNoiseFloor)
+            rawRow("PEAK HOLD", value: sensors.micPeakHold)
+            debugTextRow("TAP FRAMES", String(format: "%.0f", sensors.micLastFrameCount))
+            debugTextRow("SESSION", "\(sensors.audioSessionCategory) / \(sensors.audioSessionMode)")
+            debugTextRow("START", "SENSORS → FM INPUT")
+            debugTextRow("INPUT", sensors.audioSessionInputRoute.isEmpty ? "none" : sensors.audioSessionInputRoute)
+            debugTextRow("OUTPUT", sensors.audioSessionOutputRoute.isEmpty ? "none" : sensors.audioSessionOutputRoute)
+            debugTextRow("DEST AMP", "\(Int(bridge.mappedAmplitude * 100))% " + (bridge.micToAmplitudeEnabled ? "ROUTED" : "OFF"))
         }
         .padding(10)
         .background(SynthColors.surfaceRaised)
@@ -260,7 +300,7 @@ struct SensorFMTestView: View {
             Text(label)
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(SynthColors.textSecondary)
-                .frame(width: 56, alignment: .leading)
+                .frame(width: 70, alignment: .leading)
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 2)
@@ -268,7 +308,7 @@ struct SensorFMTestView: View {
                         .frame(height: 6)
                     RoundedRectangle(cornerRadius: 2)
                         .fill(SynthColors.divider)
-                        .frame(width: geo.size.width * value, height: 6)
+                        .frame(width: geo.size.width * min(max(value, 0), 1), height: 6)
                 }
             }
             .frame(height: 6)
@@ -276,6 +316,21 @@ struct SensorFMTestView: View {
                 .font(.system(size: 9, design: .monospaced))
                 .foregroundColor(SynthColors.textPrimary)
                 .frame(width: 44, alignment: .trailing)
+        }
+    }
+
+    private func debugTextRow(_ label: String, _ value: String) -> some View {
+        HStack(spacing: 6) {
+            Text(label)
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+                .frame(width: 76, alignment: .leading)
+            Text(value)
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(SynthColors.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer(minLength: 0)
         }
     }
 
@@ -295,6 +350,10 @@ struct SensorFMTestView: View {
             SynthColors.divider.frame(height: 1),
             alignment: .bottom
         )
+    }
+
+    private func normalised(_ value: Double, in range: ClosedRange<Double>) -> Double {
+        (value - range.lowerBound) / (range.upperBound - range.lowerBound)
     }
 
     private var sensorDrivenBadge: some View {
@@ -338,44 +397,42 @@ private struct MappingCard<BarContent: View>: View {
                     .scaleEffect(0.8)
             }
 
-            if isEnabled {
-                // Sensor bar + numeric
-                HStack(spacing: 8) {
-                    Text("IN")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(SynthColors.textSecondary)
-                        .frame(width: 14)
-                    sensorBar()
-                    Text(String(format: "%.3f", sensorValue))
-                        .font(.system(size: 10, design: .monospaced))
-                        .foregroundColor(SynthColors.textPrimary)
-                        .frame(width: 44, alignment: .trailing)
-                }
-
-                // Arrow label
-                HStack {
-                    Text(arrowLabel)
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(accentColor)
-                }
-
-                // Destination bar + value
-                HStack(spacing: 8) {
-                    Text("OUT")
-                        .font(.system(size: 8, design: .monospaced))
-                        .foregroundColor(SynthColors.textSecondary)
-                        .frame(width: 14)
-                    SensorBar(value: min(max(mappedValue, 0), 1), color: accentColor.opacity(0.6))
-                    Text(mappedUnit)
-                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                        .foregroundColor(accentColor)
-                        .frame(width: 44, alignment: .trailing)
-                }
-            } else {
-                Text("MAPPING DISABLED")
-                    .font(.system(size: 9, design: .monospaced))
+            // Sensor bar + numeric. Stays live even when mapping is off.
+            HStack(spacing: 8) {
+                Text("IN")
+                    .font(.system(size: 8, design: .monospaced))
                     .foregroundColor(SynthColors.textSecondary)
+                    .frame(width: 14)
+                sensorBar()
+                Text(String(format: "%.3f", sensorValue))
+                    .font(.system(size: 10, design: .monospaced))
+                    .foregroundColor(SynthColors.textPrimary)
+                    .frame(width: 44, alignment: .trailing)
             }
+
+            // Arrow label
+            HStack {
+                Text(arrowLabel)
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundColor(accentColor)
+            }
+
+            // Destination bar + value. "MAP" means preview only, not audio authority.
+            HStack(spacing: 8) {
+                Text(isEnabled ? "OUT" : "MAP")
+                    .font(.system(size: 8, design: .monospaced))
+                    .foregroundColor(SynthColors.textSecondary)
+                    .frame(width: 14)
+                SensorBar(value: mappedValue, color: accentColor.opacity(0.6))
+                Text(mappedUnit)
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .foregroundColor(accentColor)
+                    .frame(width: 44, alignment: .trailing)
+            }
+
+            Text(isEnabled ? "SENSOR DRIVES ENGINE" : "MAPPING OFF · SLIDER MANUAL")
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundColor(isEnabled ? accentColor : SynthColors.textSecondary)
         }
         .padding(12)
         .background(
@@ -402,7 +459,7 @@ private struct SensorBar: View {
                     .frame(height: 8)
                 RoundedRectangle(cornerRadius: 3)
                     .fill(color)
-                    .frame(width: max(geo.size.width * value, 0), height: 8)
+                    .frame(width: geo.size.width * min(max(value, 0), 1), height: 8)
                     .animation(.linear(duration: 1.0 / 60.0), value: value)
             }
         }

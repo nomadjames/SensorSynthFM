@@ -55,12 +55,18 @@ final class FMEngine {
 
     /// Start the AudioKit engine and create the FM oscillator node.
     /// Call this once when the view appears.
-    func start() {
+    func start(allowMicrophoneInput: Bool = false) {
         guard !isRunning else { return }
 
         do {
-            // Configure audio session for playback
-            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            // Configure the shared audio session before AudioKit starts.
+            if allowMicrophoneInput {
+                try AVAudioSession.sharedInstance().setCategory(.playAndRecord,
+                                                                mode: .measurement,
+                                                                options: [.defaultToSpeaker, .allowBluetoothHFP])
+            } else {
+                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
+            }
             try AVAudioSession.sharedInstance().setActive(true)
 
             // Create the FM oscillator with initial parameter values
