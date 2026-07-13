@@ -28,6 +28,8 @@ struct SensorFMTestView: View {
     @State private var engine = FMEngine()
     @State private var sensors = SensorManager()
     @State private var bridge = SensorFMBridge()
+    @State private var sceneAnalyzer = SceneFingerprintAnalyzer()
+    @State private var sceneTimer: Timer?
 
     // MARK: Body
 
@@ -40,6 +42,10 @@ struct SensorFMTestView: View {
 
                 ScrollView {
                     VStack(spacing: 20) {
+
+                        sceneFingerprintPanel
+
+                        SynthColors.divider.opacity(0.4).frame(height: 0.5)
 
                         // Mapping 1: Accelerometer → Mod Index
                         MappingCard(
@@ -236,8 +242,10 @@ struct SensorFMTestView: View {
             sensors.start()
             engine.start(allowMicrophoneInput: true)
             bridge.start(sensors: sensors, engine: engine)
+            startSceneFingerprintUpdates()
         }
         .onDisappear {
+            stopSceneFingerprintUpdates()
             bridge.stop()
             sensors.stop()
             engine.stop()
@@ -293,6 +301,130 @@ struct SensorFMTestView: View {
         .padding(10)
         .background(SynthColors.surfaceRaised)
         .cornerRadius(8)
+    }
+
+    private var sceneFingerprintPanel: some View {
+        let live = sceneAnalyzer.currentLiveFields
+        let state = sceneAnalyzer.generatedState
+        let seedHash = sceneAnalyzer.candidateFingerprint.map { String($0.seedHash, radix: 16, uppercase: true) } ?? "NO SEED"
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("SCENE FINGERPRINT")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(SynthColors.textPrimary)
+                Spacer()
+                Text(sceneAnalyzer.isListening ? "LISTENING \(Int(sceneAnalyzer.listenProgress * 100))%" : seedHash)
+                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                    .foregroundColor(SynthColors.textSecondary)
+                    .lineLimit(1)
+            }
+
+            HStack(spacing: 8) {
+                sceneButton("LISTEN 4S", disabled: sceneAnalyzer.isListening) {
+                    sceneAnalyzer.startListening()
+                }
+                sceneButton(sceneAnalyzer.isAmbientFrozen ? "UNFREEZE" : "FREEZE", disabled: sceneAnalyzer.candidateFingerprint == nil) {
+                    if sceneAnalyzer.isAmbientFrozen {
+                        sceneAnalyzer.unfreezeAmbient()
+                    } else {
+                        sceneAnalyzer.freezeAmbient()
+                    }
+                }
+                sceneButton("REGEN", disabled: sceneAnalyzer.candidateFingerprint == nil) {
+                    _ = sceneAnalyzer.regenerate()
+                }
+                sceneButton("SAVE", disabled: sceneAnalyzer.candidateFingerprint == nil) {
+                    sceneAnalyzer.saveCurrentScene()
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("AMBIENT INFLUENCE")
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(SynthColors.textSecondary)
+                    Spacer()
+                    Text("\(Int(sceneAnalyzer.ambientInfluence * 100))%")
+                        .font(.system(size: 9, design: .monospaced))
+                        .foregroundColor(SynthColors.textPrimary)
+                }
+                Slider(value: $sceneAnalyzer.ambientInfluence, in: 0...1)
+                    .tint(SynthColors.accent)
+            }
+
+            descriptorRow("ROOM ENERGY", value: live.roomEnergyEnvelope, color: SynthColors.sensorGreen)
+            descriptorRow("BRIGHTNESS", value: live.spectralBrightnessEnvelope, color: SynthColors.accent)
+            descriptorRow("BASS PRESSURE", value: live.bassPressureEnvelope, color: SynthColors.accentBlue)
+            descriptorRow("SURFACE VIBE", value: live.surfaceVibrationEnvelope, color: SynthColors.divider)
+            descriptorRow("SURFACE IMPACT", value: live.surfaceImpactEnvelope, color: SynthColors.accent)
+            descriptorRow("DEVICE STILL", value: live.deviceStillnessEnvelope, color: SynthColors.sensorGreen)
+
+            Text(String(format: "STATE  ratio %.1f  index %.2f  amp %d%%%@",
+                        state.modulatorRatio,
+                        state.modulationIndex,
+                        Int(state.amplitude * 100),
+                        sceneAnalyzer.savedFingerprint == nil ? "" : "  SAVED"))
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+        }
+        .padding(12)
+        .background(SynthColors.surfaceRaised)
+        .cornerRadius(8)
+    }
+
+    private func startSceneFingerprintUpdates() {
+        sceneTimer?.invalidate()
+        sceneTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 20.0, repeats: true) { _ in
+            sceneAnalyzer.push(sample: SceneSensorSample(
+                timestamp: Date().timeIntervalSinceReferenceDate,
+                accelX: sensors.accelX,
+                accelY: sensors.accelY,
+                accelZ: sensors.accelZ,
+                gyroX: sensors.gyroX,
+                gyroY: sensors.gyroY,
+                gyroZ: sensors.gyroZ,
+                micAmplitude: sensors.micAmplitude,
+                micLow: sensors.micLow,
+                micMid: sensors.micMid,
+                micHigh: sensors.micHigh,
+                motionAvailable: true,
+                microphonePermissionGranted: sensors.microphonePermissionGranted,
+                micSpectrumAvailable: sensors.micSpectrumAvailable
+            ))
+        }
+    }
+
+    private func stopSceneFingerprintUpdates() {
+        sceneTimer?.invalidate()
+        sceneTimer = nil
+    }
+
+    private func sceneButton(_ title: String, disabled: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(disabled ? SynthColors.textSecondary : SynthColors.background)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 6)
+                .background(disabled ? SynthColors.divider.opacity(0.25) : SynthColors.accent)
+                .cornerRadius(5)
+        }
+        .disabled(disabled)
+    }
+
+    private func descriptorRow(_ label: String, value: Double, color: Color) -> some View {
+        HStack(spacing: 8) {
+            Text(label)
+                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+                .frame(width: 92, alignment: .leading)
+            SensorBar(value: min(max(value, 0), 1), color: color)
+            Text(String(format: "%.2f", value))
+                .font(.system(size: 9, design: .monospaced))
+                .foregroundColor(SynthColors.textPrimary)
+                .frame(width: 34, alignment: .trailing)
+        }
     }
 
     private func rawRow(_ label: String, value: Double) -> some View {
