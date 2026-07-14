@@ -72,6 +72,7 @@ struct SensorFMTestView: View {
         let live = sceneAnalyzer.currentLiveFields
         let state = sceneAnalyzer.generatedState
         let seedHash = sceneAnalyzer.candidateFingerprint.map { String($0.seedHash, radix: 16, uppercase: true) } ?? "NO SEED"
+        let stateLabel = sceneAnalyzer.candidateFingerprint == nil ? "SCENE PREVIEW" : "SCENE BASE"
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -126,11 +127,11 @@ struct SensorFMTestView: View {
             descriptorRow("SURFACE IMPACT", value: live.surfaceImpactEnvelope, color: SynthColors.accent)
             descriptorRow("DEVICE STILL", value: live.deviceStillnessEnvelope, color: SynthColors.sensorGreen)
 
-            Text(String(format: "STATE  carrier %.0fHz  ratio %.1f  index %.2f  amp %d%%",
-                        state.carrierFrequency,
-                        state.modulatorRatio,
-                        state.modulationIndex,
-                        Int(state.amplitude * 100)))
+            Text(stateLabel + String(format: "  carrier %.0fHz  ratio %.1f  index %.2f  amp %d%%",
+                                           state.carrierFrequency,
+                                           state.modulatorRatio,
+                                           state.modulationIndex,
+                                           Int(state.amplitude * 100)))
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .foregroundColor(SynthColors.textSecondary)
 
@@ -140,7 +141,8 @@ struct SensorFMTestView: View {
                     .foregroundColor(SynthColors.accent)
             }
 
-            if sceneAnalyzer.savedFingerprint != nil {
+            if sceneAnalyzer.savedFingerprint == sceneAnalyzer.candidateFingerprint,
+               sceneAnalyzer.candidateFingerprint != nil {
                 Text("SAVED (SESSION ONLY)")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundColor(SynthColors.sensorGreen)
@@ -219,10 +221,15 @@ struct SensorFMTestView: View {
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(SynthColors.textPrimary)
                 Spacer()
-                Text("\(selectedSource.label) → \(selectedTarget.label)")
-                    .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                    .foregroundColor(SynthColors.textSecondary)
-                    .lineLimit(1)
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("9 SOURCES · SWIPE")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(SynthColors.accent)
+                    Text("\(selectedSource.label) → \(selectedTarget.label)")
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .foregroundColor(SynthColors.textSecondary)
+                        .lineLimit(1)
+                }
             }
 
             HStack(alignment: .top, spacing: 0) {
@@ -297,7 +304,7 @@ struct SensorFMTestView: View {
             Text(target.label)
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundColor(selected ? SynthColors.accent : SynthColors.textPrimary)
-            Text(format(target, bridge.outputValue(for: target)))
+            Text("LIVE \(format(target, bridge.outputValue(for: target)))")
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(bridge.outputIsClamped(target) ? Color.red.opacity(0.9) : SynthColors.textSecondary)
         }
@@ -329,6 +336,9 @@ struct SensorFMTestView: View {
                 .cornerRadius(6)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("\(source.label) to \(target.label)")
+        .accessibilityValue(signedPercent(amount))
+        .accessibilityHint("Select this modulation route")
     }
 
     private var selectedCellEditor: some View {
@@ -336,9 +346,14 @@ struct SensorFMTestView: View {
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("SELECTED CELL")
-                    .font(.system(size: 9, weight: .bold, design: .monospaced))
-                    .foregroundColor(SynthColors.textSecondary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("SELECTED CELL")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(SynthColors.textSecondary)
+                    Text("\(selectedSource.label) → \(selectedTarget.label)")
+                        .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        .foregroundColor(SynthColors.textSecondary)
+                }
                 Spacer()
                 Text(signedPercent(amount))
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
@@ -362,12 +377,22 @@ struct SensorFMTestView: View {
     private func amountBinding(source: SensorModulationSource, target: SensorModulationTarget) -> Binding<Double> {
         Binding(
             get: { bridge.amount(source: source, target: target) },
-            set: { bridge.setAmount($0, source: source, target: target) }
+            set: { value in
+                let snapped = abs(value) <= 0.02 ? 0 : value
+                bridge.setAmount(snapped, source: source, target: target)
+            }
         )
     }
 
     private func editorButton(_ title: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let accessibilityLabel: String
+        switch title {
+        case "−": accessibilityLabel = "Decrease modulation by one percent"
+        case "+": accessibilityLabel = "Increase modulation by one percent"
+        default: accessibilityLabel = "Reset modulation to zero"
+        }
+
+        return Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(SynthColors.background)
@@ -376,6 +401,7 @@ struct SensorFMTestView: View {
                 .cornerRadius(8)
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     // MARK: - FM engine controls

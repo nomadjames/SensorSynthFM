@@ -167,7 +167,6 @@ struct SensorModulationOutput: Equatable {
 struct SensorModulationMatrix: Equatable {
     private static let sourceCount = SensorModulationSource.allCases.count
     private static let amountCount = SensorModulationTarget.allCases.count * sourceCount
-    private static let snapToZero = 0.02
 
     private var amounts: [Double]
     private var baseCarrierFrequency: Double
@@ -197,8 +196,7 @@ struct SensorModulationMatrix: Equatable {
     }
 
     mutating func setAmount(_ value: Double, source: SensorModulationSource, target: SensorModulationTarget) {
-        let clamped = min(max(value, -1), 1)
-        amounts[index(source: source, target: target)] = abs(clamped) <= Self.snapToZero ? 0 : clamped
+        amounts[index(source: source, target: target)] = min(max(value, -1), 1)
     }
 
     func baseValue(for target: SensorModulationTarget) -> Double {

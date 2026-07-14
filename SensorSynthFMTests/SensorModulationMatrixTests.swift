@@ -78,6 +78,13 @@ struct SensorModulationMatrixTests {
         #expect(close(matrix.evaluate(sources: sources).amplitude, 0.3))
     }
 
+    @Test func onePercentNudgeAmountIsRepresentable() {
+        var matrix = SensorModulationMatrix(seedDefaults: false)
+        matrix.setAmount(0.01, source: .micAmplitude, target: .amplitude)
+
+        #expect(close(matrix.amount(source: .micAmplitude, target: .amplitude), 0.01))
+    }
+
     @Test func evaluationDoesNotMutateBaseValues() {
         var matrix = SensorModulationMatrix.defaultMatrix()
         matrix.setBaseValue(7.0, for: .modulationIndex)
