@@ -78,6 +78,24 @@ struct SensorModulationMatrixTests {
         #expect(close(matrix.evaluate(sources: sources).amplitude, 0.3))
     }
 
+    @Test func dragAmountSnapsOnlyWithinTwoPercentOfZero() {
+        #expect(ModulationAmountInteraction.dragAmount(0.02) == 0)
+        #expect(ModulationAmountInteraction.dragAmount(-0.02) == 0)
+        #expect(ModulationAmountInteraction.dragAmount(0.03) == 0.03)
+        #expect(ModulationAmountInteraction.dragAmount(-0.03) == -0.03)
+    }
+
+    @Test func dragAmountClampsToBipolarRange() {
+        #expect(ModulationAmountInteraction.dragAmount(1.2) == 1)
+        #expect(ModulationAmountInteraction.dragAmount(-1.2) == -1)
+    }
+
+    @Test func formattedAmountShowsZeroWithoutSign() {
+        #expect(ModulationAmountInteraction.formattedPercent(0) == "0%")
+        #expect(ModulationAmountInteraction.formattedPercent(0.4) == "+40%")
+        #expect(ModulationAmountInteraction.formattedPercent(-0.4) == "-40%")
+    }
+
     @Test func onePercentNudgeAmountIsRepresentable() {
         var matrix = SensorModulationMatrix(seedDefaults: false)
         matrix.setAmount(0.01, source: .micAmplitude, target: .amplitude)

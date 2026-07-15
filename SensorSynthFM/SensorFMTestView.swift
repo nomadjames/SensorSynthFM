@@ -6,6 +6,33 @@
 import Foundation
 import SwiftUI
 
+enum ModulationAmountInteraction {
+    static let zeroSnapThreshold = 0.02
+
+    static func dragAmount(_ value: Double) -> Double {
+        let clamped = clamped(value)
+        return abs(clamped) <= zeroSnapThreshold ? 0 : clamped
+    }
+
+    static func nudgeAmount(_ value: Double, by delta: Double) -> Double {
+        clamped(value + delta)
+    }
+
+    static func formattedPercent(_ value: Double) -> String {
+        let clamped = clamped(value)
+        if isZero(clamped) { return "0%" }
+        return String(format: "%+.0f%%", clamped * 100)
+    }
+
+    static func isZero(_ value: Double) -> Bool {
+        abs(value) < 0.000_001
+    }
+
+    static func clamped(_ value: Double) -> Double {
+        min(max(value, -1), 1)
+    }
+}
+
 struct SensorFMTestView: View {
 
     @State private var engine = FMEngine()
@@ -18,39 +45,27 @@ struct SensorFMTestView: View {
     @State private var selectedTarget: SensorModulationTarget = .modulationIndex
     @State private var appliedSceneKey: String?
     @State private var regenFeedback = "GEN 0 · RATIO UNCHANGED"
+    @State private var sceneDescriptorsExpanded = false
+    @State private var showDiagnostics = false
+    @State private var zeroDetentHapticTick = false
+    @AppStorage("SensorFMTestView.controlHand") private var controlHand = "right"
+
+    private var isLeftHanded: Bool { controlHand == "left" }
 
     var body: some View {
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                sectionHeader("SCENE FINGERPRINT + MATRIX")
-
-                ScrollView {
-                    VStack(spacing: 16) {
-                        sceneFingerprintPanel
-                        modulationMatrixPanel
-                        micDebugPanel
-                        rawSensorPanel
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                }
+        GeometryReader { geo in
+            if geo.size.width >= geo.size.height {
+                landscapeModulationSurface
+            } else {
+                portraitModulationSurface
             }
-            .frame(maxWidth: .infinity)
-            .background(SynthColors.surface)
-
-            SynthColors.divider.frame(width: 1)
-
-            VStack(spacing: 0) {
-                sectionHeader("FM ENGINE")
-                playStopRow
-                SynthColors.divider.frame(height: 1)
-                fmBaseControls
-            }
-            .frame(maxWidth: .infinity)
-            .background(SynthColors.background)
         }
         .background(SynthColors.background.ignoresSafeArea())
         .safeAreaPadding(.top, 8)
+        .sheet(isPresented: $showDiagnostics) {
+            diagnosticsSheet
+        }
+        .sensoryFeedback(.selection, trigger: zeroDetentHapticTick)
         .preferredColorScheme(.dark)
         .onAppear {
             sensors.start()
@@ -64,6 +79,94 @@ struct SensorFMTestView: View {
             sensors.stop()
             engine.stop()
         }
+    }
+
+    // MARK: - Adaptive modulation surface
+
+    @ViewBuilder
+    private var landscapeModulationSurface: some View {
+        HStack(spacing: 0) {
+            if isLeftHanded {
+                routeInspectorColumn
+                verticalDivider
+                matrixColumn
+                verticalDivider
+                contextColumn
+            } else {
+                contextColumn
+                verticalDivider
+                matrixColumn
+                verticalDivider
+                routeInspectorColumn
+            }
+        }
+    }
+
+    private var portraitModulationSurface: some View {
+        VStack(spacing: 0) {
+            sectionHeader("SCENE FINGERPRINT + MATRIX")
+            selectedCellEditor
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 8)
+            ScrollView {
+                VStack(spacing: 16) {
+                    sceneFingerprintPanel
+                    modulationMatrixPanel
+                    playStopRow
+                    fmBaseControls
+                    handednessControl
+                    diagnosticsButton
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 14)
+            }
+        }
+        .background(SynthColors.surface)
+    }
+
+    private var contextColumn: some View {
+        VStack(spacing: 0) {
+            sectionHeader("CONTEXT + FM")
+            playStopRow
+            SynthColors.divider.frame(height: 1)
+            VStack(spacing: 8) {
+                sceneFingerprintPanel
+                fmBaseControls
+                handednessControl
+                diagnosticsButton
+            }
+            .padding(12)
+            Spacer(minLength: 0)
+        }
+        .frame(width: 308)
+        .background(SynthColors.surface)
+    }
+
+    private var matrixColumn: some View {
+        VStack(spacing: 0) {
+            sectionHeader("MODULATION MATRIX")
+            modulationMatrixPanel
+                .padding(12)
+            Spacer(minLength: 0)
+        }
+        .frame(maxWidth: .infinity)
+        .background(SynthColors.background)
+    }
+
+    private var routeInspectorColumn: some View {
+        VStack(spacing: 0) {
+            sectionHeader("ROUTE INSPECTOR")
+            selectedCellEditor
+                .padding(12)
+            Spacer(minLength: 0)
+        }
+        .frame(width: 300)
+        .background(SynthColors.surface)
+    }
+
+    private var verticalDivider: some View {
+        SynthColors.divider.frame(width: 1)
     }
 
     // MARK: - Scene Fingerprint
@@ -120,12 +223,22 @@ struct SensorFMTestView: View {
                     .tint(SynthColors.accent)
             }
 
-            descriptorRow("ROOM ENERGY", value: live.roomEnergyEnvelope, color: SynthColors.sensorGreen)
-            descriptorRow("BRIGHTNESS", value: live.spectralBrightnessEnvelope, color: SynthColors.accent)
-            descriptorRow("BASS PRESSURE", value: live.bassPressureEnvelope, color: SynthColors.accentBlue)
-            descriptorRow("SURFACE VIBE", value: live.surfaceVibrationEnvelope, color: SynthColors.divider)
-            descriptorRow("SURFACE IMPACT", value: live.surfaceImpactEnvelope, color: SynthColors.accent)
-            descriptorRow("DEVICE STILL", value: live.deviceStillnessEnvelope, color: SynthColors.sensorGreen)
+            DisclosureGroup(isExpanded: $sceneDescriptorsExpanded) {
+                VStack(alignment: .leading, spacing: 8) {
+                    descriptorRow("ROOM ENERGY", value: live.roomEnergyEnvelope, color: SynthColors.sensorGreen)
+                    descriptorRow("BRIGHTNESS", value: live.spectralBrightnessEnvelope, color: SynthColors.accent)
+                    descriptorRow("BASS PRESSURE", value: live.bassPressureEnvelope, color: SynthColors.accentBlue)
+                    descriptorRow("SURFACE VIBE", value: live.surfaceVibrationEnvelope, color: SynthColors.divider)
+                    descriptorRow("SURFACE IMPACT", value: live.surfaceImpactEnvelope, color: SynthColors.accent)
+                    descriptorRow("DEVICE STILL", value: live.deviceStillnessEnvelope, color: SynthColors.sensorGreen)
+                }
+                .padding(.top, 4)
+            } label: {
+                Text("SCENE DESCRIPTORS")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(SynthColors.textSecondary)
+            }
+            .tint(SynthColors.accent)
 
             Text(stateLabel + String(format: "  carrier %.0fHz  ratio %.1f  index %.2f  amp %d%%",
                                            state.carrierFrequency,
@@ -232,37 +345,39 @@ struct SensorFMTestView: View {
                 }
             }
 
-            HStack(alignment: .top, spacing: 0) {
-                VStack(spacing: 0) {
-                    Text("TARGET")
-                        .font(.system(size: 8, weight: .bold, design: .monospaced))
-                        .foregroundColor(SynthColors.textSecondary)
-                        .frame(width: 116, height: 68, alignment: .bottomLeading)
-                    ForEach(SensorModulationTarget.allCases) { target in
-                        targetLabel(target)
-                    }
-                }
-
-                ScrollView(.horizontal, showsIndicators: true) {
+            ScrollView(.vertical, showsIndicators: true) {
+                HStack(alignment: .top, spacing: 0) {
                     VStack(spacing: 0) {
-                        HStack(spacing: 6) {
-                            ForEach(SensorModulationSource.allCases) { source in
-                                sourceHeader(source)
-                            }
-                        }
+                        Text("TARGET")
+                            .font(.system(size: 8, weight: .bold, design: .monospaced))
+                            .foregroundColor(SynthColors.textSecondary)
+                            .frame(width: 116, height: 68, alignment: .bottomLeading)
                         ForEach(SensorModulationTarget.allCases) { target in
+                            targetLabel(target)
+                        }
+                    }
+
+                    ScrollView(.horizontal, showsIndicators: true) {
+                        VStack(spacing: 0) {
                             HStack(spacing: 6) {
                                 ForEach(SensorModulationSource.allCases) { source in
-                                    matrixCell(source: source, target: target)
+                                    sourceHeader(source)
+                                }
+                            }
+                            ForEach(SensorModulationTarget.allCases) { target in
+                                HStack(spacing: 6) {
+                                    ForEach(SensorModulationSource.allCases) { source in
+                                        matrixCell(source: source, target: target)
+                                    }
                                 }
                             }
                         }
+                        .padding(.leading, 6)
                     }
-                    .padding(.leading, 6)
                 }
             }
-
-            selectedCellEditor
+            .frame(maxHeight: 340)
+            .accessibilityIdentifier("modulation.matrix.viewport")
         }
         .padding(12)
         .background(SynthColors.surfaceRaised)
@@ -343,11 +458,12 @@ struct SensorFMTestView: View {
 
     private var selectedCellEditor: some View {
         let amount = bridge.amount(source: selectedSource, target: selectedTarget)
+        let amountText = signedPercent(amount)
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("SELECTED CELL")
+                    Text("SELECTED ROUTE")
                         .font(.system(size: 9, weight: .bold, design: .monospaced))
                         .foregroundColor(SynthColors.textSecondary)
                     Text("\(selectedSource.label) → \(selectedTarget.label)")
@@ -355,36 +471,45 @@ struct SensorFMTestView: View {
                         .foregroundColor(SynthColors.textSecondary)
                 }
                 Spacer()
-                Text(signedPercent(amount))
+                Text(amountText)
                     .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(amount < 0 ? SynthColors.accentBlue : SynthColors.accent)
+                    .foregroundColor(amount < 0 ? SynthColors.accentBlue : (amount > 0 ? SynthColors.accent : SynthColors.textPrimary))
             }
 
-            Slider(value: amountBinding(source: selectedSource, target: selectedTarget), in: -1...1, step: 0.01)
-                .tint(amount < 0 ? SynthColors.accentBlue : SynthColors.accent)
+            BipolarAmountControl(
+                value: amountBinding(source: selectedSource, target: selectedTarget),
+                amountText: amountText
+            ) {
+                zeroDetentHapticTick.toggle()
+            }
+            .accessibilityIdentifier("modulation.amount.slider")
 
             HStack(spacing: 10) {
-                editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
-                editorButton("+") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: 0.01) }
-                editorButton("ZERO") { bridge.setAmount(0, source: selectedSource, target: selectedTarget) }
+                if isLeftHanded {
+                    editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
+                    editorButton("+") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: 0.01) }
+                } else {
+                    editorButton("+") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: 0.01) }
+                    editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
+                }
             }
+
+            editorButton("ZERO", fullWidth: true) { bridge.setAmount(0, source: selectedSource, target: selectedTarget) }
         }
         .padding(10)
         .background(SynthColors.background.opacity(0.55))
         .cornerRadius(8)
+        .accessibilityIdentifier("modulation.route.editor")
     }
 
     private func amountBinding(source: SensorModulationSource, target: SensorModulationTarget) -> Binding<Double> {
         Binding(
             get: { bridge.amount(source: source, target: target) },
-            set: { value in
-                let snapped = abs(value) <= 0.02 ? 0 : value
-                bridge.setAmount(snapped, source: source, target: target)
-            }
+            set: { value in bridge.setAmount(ModulationAmountInteraction.clamped(value), source: source, target: target) }
         )
     }
 
-    private func editorButton(_ title: String, action: @escaping () -> Void) -> some View {
+    private func editorButton(_ title: String, fullWidth: Bool = false, action: @escaping () -> Void) -> some View {
         let accessibilityLabel: String
         switch title {
         case "−": accessibilityLabel = "Decrease modulation by one percent"
@@ -396,7 +521,7 @@ struct SensorFMTestView: View {
             Text(title)
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(SynthColors.background)
-                .frame(minWidth: title == "ZERO" ? 72 : 44, minHeight: 44)
+                .frame(minWidth: title == "ZERO" ? 72 : 44, maxWidth: fullWidth ? .infinity : nil, minHeight: 44)
                 .background(SynthColors.accent)
                 .cornerRadius(8)
         }
@@ -433,19 +558,18 @@ struct SensorFMTestView: View {
     }
 
     private var fmBaseControls: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                baseSlider(.carrierFrequency, color: SynthColors.accent)
-                SynthColors.divider.opacity(0.4).frame(height: 0.5)
-                baseSlider(.modulatorRatio, color: SynthColors.accentBlue)
-                SynthColors.divider.opacity(0.4).frame(height: 0.5)
-                baseSlider(.modulationIndex, color: SynthColors.accent)
-                SynthColors.divider.opacity(0.4).frame(height: 0.5)
-                baseSlider(.amplitude, color: SynthColors.sensorGreen)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
+        VStack(spacing: 8) {
+            baseSlider(.carrierFrequency, color: SynthColors.accent)
+            SynthColors.divider.opacity(0.4).frame(height: 0.5)
+            baseSlider(.modulatorRatio, color: SynthColors.accentBlue)
+            SynthColors.divider.opacity(0.4).frame(height: 0.5)
+            baseSlider(.modulationIndex, color: SynthColors.accent)
+            SynthColors.divider.opacity(0.4).frame(height: 0.5)
+            baseSlider(.amplitude, color: SynthColors.sensorGreen)
         }
+        .padding(10)
+        .background(SynthColors.surfaceRaised)
+        .cornerRadius(8)
     }
 
     private func baseSlider(_ target: SensorModulationTarget, color: Color) -> some View {
@@ -456,8 +580,7 @@ struct SensorFMTestView: View {
                 range: target.range,
                 step: target.step,
                 displayValue: format(target, bridge.baseValue(for: target)),
-                color: color,
-                description: "Slider edits BASE. Matrix writes LIVE output below."
+                color: color
             )
             HStack {
                 Text("BASE \(format(target, bridge.baseValue(for: target)))")
@@ -478,6 +601,61 @@ struct SensorFMTestView: View {
             get: { bridge.baseValue(for: target) },
             set: { bridge.setBaseValue($0, for: target) }
         )
+    }
+
+    private var handednessControl: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("CONTROL HAND")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+            Picker("Control hand", selection: $controlHand) {
+                Text("RIGHT").tag("right")
+                Text("LEFT").tag("left")
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("Control hand")
+            .accessibilityValue(isLeftHanded ? "Left" : "Right")
+            .accessibilityIdentifier("Control hand")
+        }
+        .padding(12)
+        .background(SynthColors.surfaceRaised)
+        .cornerRadius(8)
+    }
+
+    private var diagnosticsButton: some View {
+        Button {
+            showDiagnostics = true
+        } label: {
+            Text("DIAG")
+                .font(.system(size: 12, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.background)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(SynthColors.accent)
+                .cornerRadius(8)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Diagnostics")
+    }
+
+    private var diagnosticsSheet: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 12) {
+                    micDebugPanel
+                    rawSensorPanel
+                }
+                .padding(16)
+            }
+            .background(SynthColors.background.ignoresSafeArea())
+            .navigationTitle("Diagnostics")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Close diagnostics") { showDiagnostics = false }
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+        .accessibilityIdentifier("modulation.diagnostics")
     }
 
     // MARK: - Raw sensor and debug panels
@@ -613,8 +791,7 @@ struct SensorFMTestView: View {
     }
 
     private func signedPercent(_ value: Double) -> String {
-        if abs(value) < 0.000_001 { return "+0%" }
-        return String(format: "%+.0f%%", value * 100)
+        ModulationAmountInteraction.formattedPercent(value)
     }
 
     private func format(_ target: SensorModulationTarget, _ value: Double) -> String {
@@ -640,6 +817,77 @@ struct SensorFMTestView: View {
         if amount > 0 { return SynthColors.accent.opacity(0.18) }
         if amount < 0 { return SynthColors.accentBlue.opacity(0.18) }
         return SynthColors.background.opacity(0.65)
+    }
+}
+
+private struct BipolarAmountControl: View {
+    @Binding var value: Double
+    let amountText: String
+    let onDragEnteredZero: () -> Void
+
+    var body: some View {
+        GeometryReader { geo in
+            let width = max(geo.size.width, 1)
+            let centerX = width / 2
+            let clampedValue = ModulationAmountInteraction.clamped(value)
+            let thumbX = centerX + CGFloat(clampedValue) * centerX
+            let fillColor = clampedValue < 0 ? SynthColors.accentBlue : SynthColors.accent
+
+            ZStack {
+                Capsule()
+                    .fill(SynthColors.surfaceRaised)
+                    .frame(height: 8)
+                    .position(x: centerX, y: 22)
+
+                Capsule()
+                    .fill(fillColor)
+                    .frame(width: max(abs(thumbX - centerX), 2), height: 8)
+                    .opacity(ModulationAmountInteraction.isZero(clampedValue) ? 0 : 1)
+                    .position(x: (thumbX + centerX) / 2, y: 22)
+
+                Rectangle()
+                    .fill(ModulationAmountInteraction.isZero(clampedValue) ? SynthColors.textPrimary : SynthColors.textSecondary)
+                    .frame(width: 2, height: 26)
+                    .position(x: centerX, y: 22)
+
+                Circle()
+                    .fill(fillColor)
+                    .frame(width: 28, height: 28)
+                    .overlay(Circle().stroke(SynthColors.textPrimary.opacity(0.8), lineWidth: 1))
+                    .position(x: thumbX, y: 22)
+            }
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { gesture in updateAmount(locationX: gesture.location.x, width: width) }
+            )
+        }
+        .frame(height: 44)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Modulation amount")
+        .accessibilityValue(amountText)
+        .accessibilityHint("Swipe up or down to adjust by one percent")
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment:
+                value = ModulationAmountInteraction.nudgeAmount(value, by: 0.01)
+            case .decrement:
+                value = ModulationAmountInteraction.nudgeAmount(value, by: -0.01)
+            @unknown default:
+                break
+            }
+        }
+    }
+
+    private func updateAmount(locationX: CGFloat, width: CGFloat) {
+        let clampedX = min(max(locationX, 0), width)
+        let raw = Double(clampedX / width) * 2 - 1
+        let wasAtZero = ModulationAmountInteraction.isZero(value)
+        let next = ModulationAmountInteraction.dragAmount(raw)
+        value = next
+        if !wasAtZero && ModulationAmountInteraction.isZero(next) {
+            onDragEnteredZero()
+        }
     }
 }
 
