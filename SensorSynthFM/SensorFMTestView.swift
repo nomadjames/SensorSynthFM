@@ -484,6 +484,18 @@ struct SensorFMTestView: View {
             }
             .accessibilityIdentifier("modulation.amount.slider")
 
+            HStack(spacing: 8) {
+                Text("BASE \(format(selectedTarget, bridge.baseValue(for: selectedTarget)))")
+                Spacer()
+                Text("LIVE \(format(selectedTarget, bridge.outputValue(for: selectedTarget)))")
+                if bridge.outputIsClamped(selectedTarget) {
+                    Text("CLAMPED")
+                        .foregroundColor(Color.red.opacity(0.9))
+                }
+            }
+            .font(.system(size: 8, weight: .semibold, design: .monospaced))
+            .foregroundColor(SynthColors.textSecondary)
+
             HStack(spacing: 10) {
                 if isLeftHanded {
                     editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
@@ -716,7 +728,7 @@ struct SensorFMTestView: View {
             Text(title)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .foregroundColor(disabled ? SynthColors.textSecondary : SynthColors.background)
-                .frame(minWidth: 74, minHeight: 44)
+                .frame(minWidth: 44, maxWidth: .infinity, minHeight: 44)
                 .background(disabled ? SynthColors.divider.opacity(0.25) : SynthColors.accent)
                 .cornerRadius(7)
         }
@@ -828,9 +840,11 @@ private struct BipolarAmountControl: View {
     var body: some View {
         GeometryReader { geo in
             let width = max(geo.size.width, 1)
+            let horizontalInset = min(CGFloat(14), width / 2)
+            let usableWidth = max(width - horizontalInset * 2, 1)
             let centerX = width / 2
             let clampedValue = ModulationAmountInteraction.clamped(value)
-            let thumbX = centerX + CGFloat(clampedValue) * centerX
+            let thumbX = horizontalInset + CGFloat((clampedValue + 1) / 2) * usableWidth
             let fillColor = clampedValue < 0 ? SynthColors.accentBlue : SynthColors.accent
 
             ZStack {
@@ -880,8 +894,10 @@ private struct BipolarAmountControl: View {
     }
 
     private func updateAmount(locationX: CGFloat, width: CGFloat) {
-        let clampedX = min(max(locationX, 0), width)
-        let raw = Double(clampedX / width) * 2 - 1
+        let horizontalInset = min(CGFloat(14), width / 2)
+        let usableWidth = max(width - horizontalInset * 2, 1)
+        let clampedX = min(max(locationX, horizontalInset), width - horizontalInset)
+        let raw = Double((clampedX - horizontalInset) / usableWidth) * 2 - 1
         let wasAtZero = ModulationAmountInteraction.isZero(value)
         let next = ModulationAmountInteraction.dragAmount(raw)
         value = next
