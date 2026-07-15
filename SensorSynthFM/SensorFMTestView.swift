@@ -87,8 +87,6 @@ struct SensorFMTestView: View {
     private var landscapeModulationSurface: some View {
         HStack(spacing: 0) {
             if isLeftHanded {
-                routeInspectorColumn
-                verticalDivider
                 matrixColumn
                 verticalDivider
                 contextColumn
@@ -96,8 +94,6 @@ struct SensorFMTestView: View {
                 contextColumn
                 verticalDivider
                 matrixColumn
-                verticalDivider
-                routeInspectorColumn
             }
         }
     }
@@ -148,21 +144,13 @@ struct SensorFMTestView: View {
             sectionHeader("MODULATION MATRIX")
             modulationMatrixPanel
                 .padding(12)
+            selectedCellEditor
+                .padding(.horizontal, 12)
+                .padding(.bottom, 12)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
         .background(SynthColors.background)
-    }
-
-    private var routeInspectorColumn: some View {
-        VStack(spacing: 0) {
-            sectionHeader("ROUTE INSPECTOR")
-            selectedCellEditor
-                .padding(12)
-            Spacer(minLength: 0)
-        }
-        .frame(width: 300)
-        .background(SynthColors.surface)
     }
 
     private var verticalDivider: some View {
