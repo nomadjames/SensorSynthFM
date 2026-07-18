@@ -59,6 +59,27 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         self.assertEqual(portrait.count("selectedCellEditor"), 1)
         self.assertLess(portrait.index("selectedCellEditor"), portrait.index("ScrollView"))
 
+    def test_route_editor_amount_button_resets_and_nudges_are_mirrored(self) -> None:
+        editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
+
+        handed_start = editor.index("if isLeftHanded")
+        right_start = editor.index("} else {", handed_start)
+        left_cluster = editor[handed_start:right_start]
+        right_cluster = editor[right_start:]
+
+        self.assertLess(left_cluster.index('editorButton("+")'), left_cluster.index('editorButton("−")'))
+        self.assertLess(right_cluster.index('editorButton("−")'), right_cluster.index('editorButton("+")'))
+        self.assertNotIn('editorButton("ZERO"', editor)
+        self.assertNotIn("fullWidth", self.source)
+        self.assertNotIn('title == "ZERO"', self.source)
+        self.assertRegex(
+            editor,
+            r"Button \{ bridge\.setAmount\(0, source: selectedSource, target: selectedTarget\) "
+            r"\} label: \{ Text\(amountText\).*\.frame\(minWidth: 44, minHeight: 44\).*"
+            r"\.accessibilityLabel\(\"Reset selected modulation route to zero\"\).*"
+            r"\.accessibilityHint\(\"Sets the selected route amount to zero\"\)",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

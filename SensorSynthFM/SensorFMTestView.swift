@@ -459,9 +459,17 @@ struct SensorFMTestView: View {
                         .foregroundColor(SynthColors.textSecondary)
                 }
                 Spacer()
-                Text(amountText)
-                    .font(.system(size: 16, weight: .bold, design: .monospaced))
-                    .foregroundColor(amount < 0 ? SynthColors.accentBlue : (amount > 0 ? SynthColors.accent : SynthColors.textPrimary))
+                Button {
+                    bridge.setAmount(0, source: selectedSource, target: selectedTarget)
+                } label: {
+                    Text(amountText)
+                        .font(.system(size: 16, weight: .bold, design: .monospaced))
+                        .foregroundColor(amount < 0 ? SynthColors.accentBlue : (amount > 0 ? SynthColors.accent : SynthColors.textPrimary))
+                        .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Reset selected modulation route to zero")
+                .accessibilityHint("Sets the selected route amount to zero")
             }
 
             BipolarAmountControl(
@@ -486,15 +494,13 @@ struct SensorFMTestView: View {
 
             HStack(spacing: 10) {
                 if isLeftHanded {
-                    editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
                     editorButton("+") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: 0.01) }
+                    editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
                 } else {
-                    editorButton("+") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: 0.01) }
                     editorButton("−") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: -0.01) }
+                    editorButton("+") { bridge.stepAmount(source: selectedSource, target: selectedTarget, by: 0.01) }
                 }
             }
-
-            editorButton("ZERO", fullWidth: true) { bridge.setAmount(0, source: selectedSource, target: selectedTarget) }
         }
         .padding(10)
         .background(SynthColors.background.opacity(0.55))
@@ -509,19 +515,14 @@ struct SensorFMTestView: View {
         )
     }
 
-    private func editorButton(_ title: String, fullWidth: Bool = false, action: @escaping () -> Void) -> some View {
-        let accessibilityLabel: String
-        switch title {
-        case "−": accessibilityLabel = "Decrease modulation by one percent"
-        case "+": accessibilityLabel = "Increase modulation by one percent"
-        default: accessibilityLabel = "Reset modulation to zero"
-        }
+    private func editorButton(_ title: String, action: @escaping () -> Void) -> some View {
+        let accessibilityLabel = title == "−" ? "Decrease modulation by one percent" : "Increase modulation by one percent"
 
         return Button(action: action) {
             Text(title)
                 .font(.system(size: 13, weight: .bold, design: .monospaced))
                 .foregroundColor(SynthColors.background)
-                .frame(minWidth: title == "ZERO" ? 72 : 44, maxWidth: fullWidth ? .infinity : nil, minHeight: 44)
+                .frame(minWidth: 44, minHeight: 44)
                 .background(SynthColors.accent)
                 .cornerRadius(8)
         }
