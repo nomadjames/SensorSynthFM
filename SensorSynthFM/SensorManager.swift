@@ -10,6 +10,37 @@ import Foundation
 import CoreMotion
 import AVFoundation
 import Accelerate
+import Synchronization
+
+/// Lock-free scalar handoff from the real-time audio callback to the main-thread meter.
+/// Every field is independent, so relaxed ordering is sufficient.
+nonisolated struct AudioSampleSnapshot: ~Copyable, Sendable {
+    private let rms = Atomic<Float>(0)
+    private let low = Atomic<Float>(0)
+    private let mid = Atomic<Float>(0)
+    private let high = Atomic<Float>(0)
+    private let tapFrames = Atomic<Float>(0)
+
+    @inline(__always)
+    func store(rms: Float, low: Float, mid: Float, high: Float, tapFrames: Float) {
+        self.rms.store(rms, ordering: .relaxed)
+        self.low.store(low, ordering: .relaxed)
+        self.mid.store(mid, ordering: .relaxed)
+        self.high.store(high, ordering: .relaxed)
+        self.tapFrames.store(tapFrames, ordering: .relaxed)
+    }
+
+    @inline(__always)
+    func load() -> (rms: Float, low: Float, mid: Float, high: Float, tapFrames: Float) {
+        (
+            rms: rms.load(ordering: .relaxed),
+            low: low.load(ordering: .relaxed),
+            mid: mid.load(ordering: .relaxed),
+            high: high.load(ordering: .relaxed),
+            tapFrames: tapFrames.load(ordering: .relaxed)
+        )
+    }
+}
 
 // MARK: - SensorManager
 
@@ -72,14 +103,6 @@ final class SensorManager {
     private var fftLength: Int = 0
     private var fftSetup: FFTSetup?
 
-    /// Atomics written from the audio thread, read on main.
-    /// Using UnsafeMutablePointer<Float> for lock-free, allocation-free updates.
-    private var atomicRMS: UnsafeMutablePointer<Float>?
-    private var atomicLow: UnsafeMutablePointer<Float>?
-    private var atomicMid: UnsafeMutablePointer<Float>?
-    private var atomicHigh: UnsafeMutablePointer<Float>?
-    private var atomicTapFrames: UnsafeMutablePointer<Float>?
-
     /// Display-link timer to pull values off the audio thread.
     private var displayTimer: Timer?
     private var inputTapInstalled = false
@@ -115,7 +138,6 @@ final class SensorManager {
 
     deinit {
         stop()
-        freeAtomicBuffers()
     }
 
     // MARK: - Motion -------------------------------------------------------
@@ -222,9 +244,6 @@ final class SensorManager {
         attackCoeff  = 1.0 - expf(-timerStep / attackTime)
         releaseCoeff = 1.0 - expf(-timerStep / releaseTime)
 
-        // --- Allocate atomic float pointers (once) ---
-        allocateAtomicBuffers()
-
         // --- Pre-allocate FFT resources ---
         let log2n = vDSP_Length(log2f(Float(bufferSize)))
         fftLength = Int(bufferSize)
@@ -239,12 +258,8 @@ final class SensorManager {
         let realBuf  = fftRealBuffer!
         let imagBuf  = fftImagBuffer!
         let halfLen  = fftLength / 2
-        let aRMS     = atomicRMS!
-        let aLow     = atomicLow!
-        let aMid     = atomicMid!
-        let aHigh    = atomicHigh!
-        let aTapFrames = atomicTapFrames!
         let sr       = sampleRate
+        let sampleSnapshot = AudioSampleSnapshot()
 
         // Bin boundaries for frequency bands.
         let binResolution = sr / Float(bufferSize)
@@ -254,14 +269,18 @@ final class SensorManager {
 
         // FFT setup (Accelerate) — stored so it can be freed in freeFFTBuffers()
         fftSetup = vDSP_create_fftsetup(log2n, FFTRadix(kFFTRadix2))
-        let fftSetupRef = fftSetup
+        guard let fftSetupRef = fftSetup else {
+            micSpectrumAvailable = false
+            micDebugStatus = "FFT setup error"
+            freeFFTBuffers()
+            return
+        }
 
         // --- Install tap (real-time safe closure) ---
         inputNode.installTap(onBus: 0, bufferSize: bufferSize,
                              format: hwFormat) { buffer, _ in
             guard let channelData = buffer.floatChannelData else { return }
             let frames = Int(buffer.frameLength)
-            aTapFrames.pointee = Float(frames)
             let samples = channelData[0]  // mono channel 0
 
             // 1. RMS amplitude
@@ -270,12 +289,9 @@ final class SensorManager {
 
             // Clamp to 0…1 (RMS of a full-scale sine ≈ 0.707).
             let normRMS = min(rms / 0.707, 1.0)
-            aRMS.pointee = normRMS
 
             // 2. FFT — in-place, no allocations.
             //    Copy samples into split complex (real part).
-            guard let setup = fftSetupRef else { return }
-
             // Fill real buffer with windowed samples (rectangular — no window
             // multiply to stay allocation-free and lock-free).
             let count = min(frames, halfLen * 2)
@@ -295,7 +311,7 @@ final class SensorManager {
             }
 
             var splitComplex = DSPSplitComplex(realp: realBuf, imagp: imagBuf)
-            vDSP_fft_zrip(setup, &splitComplex, 1, log2n, FFTDirection(kFFTDirection_Forward))
+            vDSP_fft_zrip(fftSetupRef, &splitComplex, 1, log2n, FFTDirection(kFFTDirection_Forward))
 
             // 3. Energy per band
             var lowEnergy: Float  = 0.0
@@ -322,9 +338,13 @@ final class SensorManager {
                 return min(mag, 1.0)
             }
 
-            aLow.pointee  = norm(lowEnergy,  max(lowEnd, 1))
-            aMid.pointee  = norm(midEnergy,  max(midEnd - lowEnd, 1))
-            aHigh.pointee = norm(highEnergy, max(halfLen - midEnd, 1))
+            sampleSnapshot.store(
+                rms: normRMS,
+                low: norm(lowEnergy, max(lowEnd, 1)),
+                mid: norm(midEnergy, max(midEnd - lowEnd, 1)),
+                high: norm(highEnergy, max(halfLen - midEnd, 1)),
+                tapFrames: Float(frames)
+            )
         }
         inputTapInstalled = true
 
@@ -349,11 +369,12 @@ final class SensorManager {
         displayTimer = Timer.scheduledTimer(withTimeInterval: displayInterval,
                                             repeats: true) { [weak self] _ in
             guard let self else { return }
-            let rawRMS  = Double(self.atomicRMS?.pointee ?? 0)
-            let rawLow  = Double(self.atomicLow?.pointee ?? 0)
-            let rawMid  = Double(self.atomicMid?.pointee ?? 0)
-            let rawHigh = Double(self.atomicHigh?.pointee ?? 0)
-            let tapFrames = Double(self.atomicTapFrames?.pointee ?? 0)
+            let sample = sampleSnapshot.load()
+            let rawRMS = Double(sample.rms)
+            let rawLow = Double(sample.low)
+            let rawMid = Double(sample.mid)
+            let rawHigh = Double(sample.high)
+            let tapFrames = Double(sample.tapFrames)
 
             self.envelopeRMS  = Self.envelope(old: self.envelopeRMS,  new: rawRMS,
                                               attack: atk, release: rel)
@@ -427,24 +448,6 @@ final class SensorManager {
         guard old > 0 else { return new }
         let alpha = new < old ? 0.20 : 0.001
         return old + alpha * (new - old)
-    }
-
-    // MARK: - Atomic buffer management
-
-    private func allocateAtomicBuffers() {
-        if atomicRMS == nil { atomicRMS = .allocate(capacity: 1); atomicRMS!.initialize(to: 0) } else { atomicRMS!.pointee = 0 }
-        if atomicLow == nil { atomicLow = .allocate(capacity: 1); atomicLow!.initialize(to: 0) } else { atomicLow!.pointee = 0 }
-        if atomicMid == nil { atomicMid = .allocate(capacity: 1); atomicMid!.initialize(to: 0) } else { atomicMid!.pointee = 0 }
-        if atomicHigh == nil { atomicHigh = .allocate(capacity: 1); atomicHigh!.initialize(to: 0) } else { atomicHigh!.pointee = 0 }
-        if atomicTapFrames == nil { atomicTapFrames = .allocate(capacity: 1); atomicTapFrames!.initialize(to: 0) } else { atomicTapFrames!.pointee = 0 }
-    }
-
-    private func freeAtomicBuffers() {
-        atomicRMS?.deinitialize(count: 1);  atomicRMS?.deallocate();  atomicRMS  = nil
-        atomicLow?.deinitialize(count: 1);  atomicLow?.deallocate();  atomicLow  = nil
-        atomicMid?.deinitialize(count: 1);  atomicMid?.deallocate();  atomicMid  = nil
-        atomicHigh?.deinitialize(count: 1); atomicHigh?.deallocate(); atomicHigh = nil
-        atomicTapFrames?.deinitialize(count: 1); atomicTapFrames?.deallocate(); atomicTapFrames = nil
     }
 
     private func freeFFTBuffers() {
