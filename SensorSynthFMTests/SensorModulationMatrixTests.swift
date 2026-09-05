@@ -133,6 +133,21 @@ struct SensorModulationMatrixTests {
         #expect(close(matrix.baseValue(for: .amplitude), 0.42))
     }
 
+    @Test func clearingOneRoutePreservesOtherRoutesAndBaseValues() {
+        var matrix = SensorModulationMatrix(seedDefaults: false)
+        matrix.setBaseValue(330, for: .carrierFrequency)
+        matrix.setBaseValue(0.42, for: .amplitude)
+        matrix.setAmount(-0.25, source: .gyroY, target: .carrierFrequency)
+        matrix.setAmount(0.37, source: .roomEnergy, target: .amplitude)
+
+        matrix.setAmount(0, source: .roomEnergy, target: .amplitude)
+
+        #expect(close(matrix.amount(source: .roomEnergy, target: .amplitude), 0))
+        #expect(close(matrix.amount(source: .gyroY, target: .carrierFrequency), -0.25))
+        #expect(close(matrix.baseValue(for: .carrierFrequency), 330))
+        #expect(close(matrix.baseValue(for: .amplitude), 0.42))
+    }
+
     private func close(_ lhs: Double, _ rhs: Double, tolerance: Double = 0.000_001) -> Bool {
         abs(lhs - rhs) <= tolerance
     }

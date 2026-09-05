@@ -146,7 +146,8 @@ struct SensorFMTestView: View {
                 .padding(12)
             selectedCellEditor
                 .padding(.horizontal, 12)
-                .padding(.bottom, 12)
+                .padding(.bottom, 24)
+                .safeAreaPadding(.bottom, 16)
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity)
@@ -412,7 +413,7 @@ struct SensorFMTestView: View {
                 .foregroundColor(bridge.outputIsClamped(target) ? Color.red.opacity(0.9) : SynthColors.textSecondary)
         }
         .padding(.horizontal, 6)
-        .frame(width: 116, height: 50, alignment: .leading)
+        .frame(width: 116, height: 60, alignment: .leading)
         .background(selected ? SynthColors.accent.opacity(0.15) : Color.clear)
         .cornerRadius(6)
     }
@@ -422,33 +423,78 @@ struct SensorFMTestView: View {
         let amount = bridge.amount(source: source, target: target)
         let active = abs(amount) > 0.000_001
         let text = selected || active ? signedPercent(amount) : ""
+        let stateText = active ? "ACTIVE" : (selected ? "SELECTED · NEUTRAL" : "")
+        let accessibilityValue = stateText.isEmpty
+            ? signedPercent(amount)
+            : "\(signedPercent(amount)) · \(stateText)"
+        let activationHint = selected && !active
+            ? "Selected but neutral. Adjust amount to activate this route"
+            : (active ? "Active route. Double-tap to remove" : "Select this modulation route")
 
         return Button {
             selectedSource = source
             selectedTarget = target
         } label: {
-            Text(text)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(active || selected ? SynthColors.textPrimary : SynthColors.textSecondary)
-                .frame(width: 92, height: 50)
-                .background(cellColor(amount: amount, selected: selected))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(selected ? SynthColors.accent : Color.clear, lineWidth: 2)
-                )
-                .cornerRadius(6)
+            VStack(spacing: 2) {
+                Text(text)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(active || selected ? SynthColors.textPrimary : SynthColors.textSecondary)
+                if selected && !active {
+                    Text("SELECTED · NEUTRAL")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(SynthColors.textPrimary)
+                        .minimumScaleFactor(0.7)
+                    Text("ADJUST TO ACTIVATE")
+                        .font(.system(size: 6, weight: .bold, design: .monospaced))
+                        .foregroundColor(SynthColors.textPrimary)
+                        .minimumScaleFactor(0.65)
+                } else if active {
+                    Text("ACTIVE")
+                        .font(.system(size: 7, weight: .bold, design: .monospaced))
+                        .foregroundColor(SynthColors.textPrimary)
+                }
+            }
+            .frame(width: 92, height: 60)
+            .background(cellColor(amount: amount, selected: selected))
+            .overlay(
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(selected ? SynthColors.accent : Color.clear, lineWidth: 2)
+            )
+            .cornerRadius(6)
         }
         .buttonStyle(.plain)
+        .onTapGesture(count: 2) {
+            guard active else { return }
+            bridge.setAmount(0, source: source, target: target)
+        }
         .accessibilityLabel("\(source.label) to \(target.label)")
-        .accessibilityValue(signedPercent(amount))
-        .accessibilityHint("Select this modulation route")
+        .accessibilityValue(accessibilityValue)
+        .accessibilityHint(activationHint)
     }
 
     private var selectedCellEditor: some View {
         let amount = bridge.amount(source: selectedSource, target: selectedTarget)
         let amountText = signedPercent(amount)
+        let stateText = ModulationAmountInteraction.isZero(amount) ? "SELECTED · NEUTRAL" : "ACTIVE"
 
         return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text("LIVE SOURCE")
+                    Spacer()
+                    Text(selectedSource.label)
+                }
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+                HStack(spacing: 8) {
+                    SensorBar(value: bridge.sourceValue(for: selectedSource), color: color(for: selectedSource))
+                    Text(String(format: "%.2f", bridge.sourceValue(for: selectedSource)))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(SynthColors.textPrimary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+            }
+
             HStack {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("SELECTED ROUTE")
@@ -470,6 +516,30 @@ struct SensorFMTestView: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel("Reset selected modulation route to zero")
                 .accessibilityHint("Sets the selected route amount to zero")
+            }
+
+            HStack(spacing: 8) {
+                Text("STATE \(stateText)")
+                Spacer()
+                Text("TAP VALUE TO RESET")
+            }
+            .font(.system(size: 8, weight: .bold, design: .monospaced))
+            .foregroundColor(SynthColors.textSecondary)
+
+            if !ModulationAmountInteraction.isZero(amount) {
+                Button {
+                    clearSelectedRoute()
+                } label: {
+                    Label("REMOVE ROUTE", systemImage: "trash")
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(SynthColors.background)
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                        .background(Color.red.opacity(0.8))
+                        .cornerRadius(8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove selected modulation route")
+                .accessibilityHint("Clears only the selected route and returns it to zero")
             }
 
             BipolarAmountControl(
@@ -506,6 +576,10 @@ struct SensorFMTestView: View {
         .background(SynthColors.background.opacity(0.55))
         .cornerRadius(8)
         .accessibilityIdentifier("modulation.route.editor")
+    }
+
+    private func clearSelectedRoute() {
+        bridge.setAmount(0, source: selectedSource, target: selectedTarget)
     }
 
     private func amountBinding(source: SensorModulationSource, target: SensorModulationTarget) -> Binding<Double> {

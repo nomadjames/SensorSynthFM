@@ -59,6 +59,51 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         self.assertEqual(portrait.count("selectedCellEditor"), 1)
         self.assertLess(portrait.index("selectedCellEditor"), portrait.index("ScrollView"))
 
+    def test_active_route_exposes_visible_removal_control(self) -> None:
+        editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
+
+        self.assertIn('Label("REMOVE ROUTE", systemImage: "trash")', editor)
+        self.assertIn('accessibilityLabel("Remove selected modulation route")', editor)
+        self.assertRegex(editor, r'Label\("REMOVE ROUTE", systemImage: "trash"\).*frame\(maxWidth: \.infinity, minHeight: 44\)')
+
+        cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
+        self.assertIn(".onTapGesture(count: 2)", cell)
+        self.assertIn("guard active else { return }", cell)
+
+    def test_selected_zero_route_explains_activation_without_color(self) -> None:
+        cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
+
+        self.assertIn('Text("SELECTED · NEUTRAL")', cell)
+        self.assertIn('Text("ADJUST TO ACTIVATE")', cell)
+        self.assertIn('Selected but neutral. Adjust amount to activate this route', cell)
+
+    def test_current_grid_uses_56_point_cells_with_scroll_fallback_and_labels(self) -> None:
+        cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
+        matrix = re.sub(r"\s+", " ", property_body(self.source, "modulationMatrixPanel"))
+
+        self.assertRegex(cell, r"frame\(width: (?:5[6-9]|[6-9][0-9]|[1-9][0-9]{2,}), height: (?:5[6-9]|[6-9][0-9]|[1-9][0-9]{2,})\)")
+        self.assertIn("ForEach(SensorModulationSource.allCases)", matrix)
+        self.assertIn("ForEach(SensorModulationTarget.allCases)", matrix)
+        self.assertIn("sourceHeader(source)", matrix)
+        self.assertIn("targetLabel(target)", matrix)
+        self.assertIn("ScrollView(.horizontal", matrix)
+        self.assertIn("ScrollView(.vertical", matrix)
+
+    def test_selected_route_cluster_exposes_live_source_and_state(self) -> None:
+        editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
+
+        self.assertIn('Text("LIVE SOURCE")', editor)
+        self.assertIn("bridge.sourceValue(for: selectedSource)", editor)
+        self.assertIn("SensorBar(value: bridge.sourceValue(for: selectedSource)", editor)
+        self.assertIn('Text("STATE \\(stateText)")', editor)
+        self.assertIn("BASE \\(format(selectedTarget", editor)
+        self.assertIn("LIVE \\(format(selectedTarget", editor)
+
+    def test_landscape_editor_has_bottom_gesture_separation(self) -> None:
+        matrix = re.sub(r"\s+", " ", property_body(self.source, "matrixColumn"))
+
+        self.assertIn("selectedCellEditor .padding(.horizontal, 12) .padding(.bottom, 24) .safeAreaPadding(.bottom, 16)", matrix)
+
     def test_route_editor_amount_button_resets_and_nudges_are_mirrored(self) -> None:
         editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
 
