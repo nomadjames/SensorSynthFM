@@ -63,8 +63,11 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
 
         self.assertIn('Label("REMOVE ROUTE", systemImage: "trash")', editor)
-        self.assertIn('accessibilityLabel("Remove selected modulation route")', editor)
+        self.assertIn('private func clearSelectedRoute()', self.source)
         self.assertRegex(editor, r'Label\("REMOVE ROUTE", systemImage: "trash"\).*frame\(maxWidth: \.infinity, minHeight: 44\)')
+        self.assertNotIn('if !ModulationAmountInteraction.isZero(amount)', editor)
+        self.assertIn('.opacity(ModulationAmountInteraction.isZero(amount) ? 0 : 1)', editor)
+        self.assertIn('.allowsHitTesting(!ModulationAmountInteraction.isZero(amount))', editor)
 
         cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
         self.assertIn(".onTapGesture(count: 2)", cell)

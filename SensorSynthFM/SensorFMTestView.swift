@@ -526,21 +526,22 @@ struct SensorFMTestView: View {
             .font(.system(size: 8, weight: .bold, design: .monospaced))
             .foregroundColor(SynthColors.textSecondary)
 
-            if !ModulationAmountInteraction.isZero(amount) {
-                Button {
-                    clearSelectedRoute()
-                } label: {
-                    Label("REMOVE ROUTE", systemImage: "trash")
-                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                        .foregroundColor(SynthColors.background)
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                        .background(Color.red.opacity(0.8))
-                        .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Remove selected modulation route")
-                .accessibilityHint("Clears only the selected route and returns it to zero")
+            Button {
+                clearSelectedRoute()
+            } label: {
+                Label("REMOVE ROUTE", systemImage: "trash")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(SynthColors.background)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+                    .background(Color.red.opacity(0.8))
+                    .cornerRadius(8)
             }
+            .buttonStyle(.plain)
+            .opacity(ModulationAmountInteraction.isZero(amount) ? 0 : 1)
+            .allowsHitTesting(!ModulationAmountInteraction.isZero(amount))
+            .accessibilityHidden(ModulationAmountInteraction.isZero(amount))
+            .accessibilityLabel("Remove selected modulation route")
+            .accessibilityHint("Clears only the selected route and returns it to zero")
 
             BipolarAmountControl(
                 value: amountBinding(source: selectedSource, target: selectedTarget),
