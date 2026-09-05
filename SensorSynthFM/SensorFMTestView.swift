@@ -35,6 +35,8 @@ enum ModulationAmountInteraction {
 
 struct SensorFMTestView: View {
 
+    let startLiveRuntime: Bool
+
     @State private var engine = FMEngine()
     @State private var sensors = SensorManager()
     @State private var bridge = SensorFMBridge()
@@ -52,6 +54,10 @@ struct SensorFMTestView: View {
 
     private var isLeftHanded: Bool { controlHand == "left" }
 
+    init(startLiveRuntime: Bool = true) {
+        self.startLiveRuntime = startLiveRuntime
+    }
+
     var body: some View {
         GeometryReader { geo in
             if geo.size.width >= geo.size.height {
@@ -68,6 +74,7 @@ struct SensorFMTestView: View {
         .sensoryFeedback(.selection, trigger: zeroDetentHapticTick)
         .preferredColorScheme(.dark)
         .onAppear {
+            guard startLiveRuntime else { return }
             sensors.start()
             engine.start(allowMicrophoneInput: true)
             bridge.start(sensors: sensors, engine: engine, sceneAnalyzer: sceneAnalyzer)
@@ -331,6 +338,7 @@ struct SensorFMTestView: View {
                         .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         .foregroundColor(SynthColors.textSecondary)
                         .lineLimit(1)
+                        .accessibilityIdentifier("modulation.matrix.selection.context")
                 }
             }
 
@@ -400,6 +408,7 @@ struct SensorFMTestView: View {
         .frame(width: 92, height: 68)
         .background(selected ? SynthColors.accent.opacity(0.15) : SynthColors.background.opacity(0.55))
         .cornerRadius(6)
+        .accessibilityIdentifier("modulation.source.\(source.rawValue)")
     }
 
     private func targetLabel(_ target: SensorModulationTarget) -> some View {
@@ -416,6 +425,7 @@ struct SensorFMTestView: View {
         .frame(width: 116, height: 60, alignment: .leading)
         .background(selected ? SynthColors.accent.opacity(0.15) : Color.clear)
         .cornerRadius(6)
+        .accessibilityIdentifier("modulation.target.\(target.rawValue)")
     }
 
     private func matrixCell(source: SensorModulationSource, target: SensorModulationTarget) -> some View {
@@ -470,6 +480,7 @@ struct SensorFMTestView: View {
         .accessibilityLabel("\(source.label) to \(target.label)")
         .accessibilityValue(accessibilityValue)
         .accessibilityHint(activationHint)
+        .accessibilityIdentifier("modulation.cell.source.\(source.rawValue).target.\(target.rawValue)")
     }
 
     private var selectedCellEditor: some View {
@@ -503,6 +514,7 @@ struct SensorFMTestView: View {
                     Text("\(selectedSource.label) → \(selectedTarget.label)")
                         .font(.system(size: 8, weight: .semibold, design: .monospaced))
                         .foregroundColor(SynthColors.textSecondary)
+                        .accessibilityIdentifier("modulation.selected.route.context")
                 }
                 Spacer()
                 Button {
@@ -542,6 +554,7 @@ struct SensorFMTestView: View {
             .accessibilityHidden(ModulationAmountInteraction.isZero(amount))
             .accessibilityLabel("Remove selected modulation route")
             .accessibilityHint("Clears only the selected route and returns it to zero")
+            .accessibilityIdentifier("modulation.route.remove")
 
             BipolarAmountControl(
                 value: amountBinding(source: selectedSource, target: selectedTarget),
@@ -592,6 +605,7 @@ struct SensorFMTestView: View {
 
     private func editorButton(_ title: String, action: @escaping () -> Void) -> some View {
         let accessibilityLabel = title == "−" ? "Decrease modulation by one percent" : "Increase modulation by one percent"
+        let accessibilityIdentifier = title == "−" ? "modulation.amount.decrease" : "modulation.amount.increase"
 
         return Button(action: action) {
             Text(title)
@@ -603,6 +617,7 @@ struct SensorFMTestView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(accessibilityLabel)
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     // MARK: - FM engine controls

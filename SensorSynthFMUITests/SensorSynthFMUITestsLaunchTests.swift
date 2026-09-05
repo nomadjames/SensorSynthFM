@@ -19,8 +19,17 @@ final class SensorSynthFMUITestsLaunchTests: XCTestCase {
 
     @MainActor
     func testLaunch() throws {
+        XCUIDevice.shared.orientation = .landscapeLeft
         let app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
         app.launch()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "modulation.matrix.viewport")
+                .firstMatch
+                .waitForExistence(timeout: 5)
+        )
 
         // Insert steps here to perform after app launch but before taking a screenshot,
         // such as logging into a test account or navigating somewhere in the app

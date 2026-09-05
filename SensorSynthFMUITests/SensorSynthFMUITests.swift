@@ -2,40 +2,109 @@
 //  SensorSynthFMUITests.swift
 //  SensorSynthFMUITests
 //
-//  Created by nomad james on 2/16/26.
-//
 
+import Foundation
 import XCTest
 
 final class SensorSynthFMUITests: XCTestCase {
+    private var app: XCUIApplication!
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
+        XCUIDevice.shared.orientation = .landscapeLeft
 
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
-    }
-
-    @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
-        let app = XCUIApplication()
+        app = XCUIApplication()
+        app.launchArguments = ["-ui-testing"]
         app.launch()
-
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
-        // This measures how long it takes to launch your application.
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
+    func testNeutralRouteCanActivateAndBeRemovedWithoutCollapsingEditor() throws {
+        XCTAssertTrue(
+            element(withIdentifier: "modulation.matrix.viewport").waitForExistence(timeout: 5),
+            "The landscape modulation surface should render in UI-test mode"
+        )
+        let neutralCell = element(withIdentifier: "modulation.cell.source.3.target.0")
+        reveal(neutralCell)
+        XCTAssertTrue(neutralCell.isHittable, "The neutral route cell should be reachable")
+
+        neutralCell.tap()
+        XCTAssertTrue(
+            waitForValueContaining(neutralCell, "SELECTED · NEUTRAL"),
+            "Selecting an unused route should expose neutral state"
+        )
+
+        let editor = element(withIdentifier: "modulation.route.editor")
+        let amountControl = element(withIdentifier: "modulation.amount.slider")
+        XCTAssertTrue(editor.exists)
+        XCTAssertTrue(amountControl.exists)
+        XCTAssertTrue(element(withIdentifier: "modulation.selected.route.context").exists)
+
+        element(withIdentifier: "modulation.amount.increase").tap()
+        XCTAssertTrue(
+            waitForValueContaining(neutralCell, "ACTIVE"),
+            "Adjusting a neutral route should activate it"
+        )
+
+        let remove = element(withIdentifier: "modulation.route.remove")
+        XCTAssertTrue(remove.waitForExistence(timeout: 2), "Active routes should expose removal")
+        remove.tap()
+
+        XCTAssertTrue(
+            waitForValueContaining(neutralCell, "SELECTED · NEUTRAL"),
+            "Removing a route should return the selected cell to neutral"
+        )
+        XCTAssertTrue(editor.exists, "Removing a route must not remove the editor")
+        XCTAssertTrue(amountControl.exists, "Removing a route must not remove amount control")
+        XCTAssertFalse(remove.waitForExistence(timeout: 0.5), "Neutral routes should hide removal")
+    }
+
+    @MainActor
+    func testMatrixReachesOffscreenSourceAndKeepsContextQueryable() throws {
+        let viewport = element(withIdentifier: "modulation.matrix.viewport")
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+
+        let offscreenCell = element(withIdentifier: "modulation.cell.source.8.target.0")
+        reveal(offscreenCell)
+        XCTAssertTrue(offscreenCell.isHittable, "The ninth source should be reachable by horizontal scrolling")
+        XCTAssertTrue(element(withIdentifier: "modulation.source.8").isHittable)
+
+        XCTAssertTrue(element(withIdentifier: "modulation.target.0").exists, "Target labels remain queryable")
+        XCTAssertTrue(element(withIdentifier: "modulation.matrix.selection.context").exists)
+        XCTAssertTrue(element(withIdentifier: "modulation.selected.route.context").exists)
+
+        offscreenCell.tap()
+        XCTAssertTrue(element(withIdentifier: "modulation.selected.route.context").exists)
+        XCTAssertTrue(element(withIdentifier: "modulation.route.editor").exists)
+    }
+
+    @MainActor
+    private func element(withIdentifier identifier: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    }
+
+    @MainActor
+    private func reveal(_ target: XCUIElement) {
+        let viewport = element(withIdentifier: "modulation.matrix.viewport")
+        for _ in 0..<8 {
+            if target.isHittable { return }
+            viewport.swipeLeft()
         }
+    }
+
+    @MainActor
+    private func waitForValueContaining(
+        _ element: XCUIElement,
+        _ expected: String,
+        timeout: TimeInterval = 2
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if (element.value as? String)?.contains(expected) == true {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        } while Date() < deadline
+        return false
     }
 }

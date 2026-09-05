@@ -34,4 +34,14 @@ struct SensorSynthFMTests {
         #expect(SensorSynthFMRuntimeMode.shouldStart(environment: [:]))
     }
 
+    @Test func uiTestModeRendersSurfaceWithoutStartingLiveRuntime() {
+        let environment = ["XCTestConfigurationFilePath": "/tmp/ui-tests.xctestconfiguration"]
+        let arguments = ["SensorSynthFM", SensorSynthFMRuntimeMode.uiTestingLaunchArgument]
+
+        #expect(SensorSynthFMRuntimeMode.isUITesting(arguments: arguments))
+        #expect(SensorSynthFMRuntimeMode.shouldRenderSurface(environment: environment, arguments: arguments))
+        #expect(!SensorSynthFMRuntimeMode.shouldStartLiveRuntime(environment: environment, arguments: arguments))
+        #expect(!SensorSynthFMRuntimeMode.shouldStartLiveRuntime(environment: [:], arguments: arguments))
+    }
+
 }

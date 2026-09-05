@@ -92,6 +92,37 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         self.assertIn("ScrollView(.horizontal", matrix)
         self.assertIn("ScrollView(.vertical", matrix)
 
+    def test_matrix_context_and_route_controls_have_stable_identifiers(self) -> None:
+        source_header = re.sub(r"\s+", " ", self.source[self.source.index("private func sourceHeader"):self.source.index("private func targetLabel")])
+        target_label = re.sub(r"\s+", " ", self.source[self.source.index("private func targetLabel"):self.source.index("private func matrixCell")])
+        cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
+        editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
+
+        self.assertIn('modulation.source.\\(source.rawValue)', source_header)
+        self.assertIn('modulation.target.\\(target.rawValue)', target_label)
+        self.assertIn('modulation.cell.source.\\(source.rawValue).target.\\(target.rawValue)', cell)
+        self.assertIn('modulation.route.remove', editor)
+        self.assertIn('modulation.amount.increase', self.source)
+        self.assertIn('modulation.amount.decrease', self.source)
+
+    def test_ui_tests_cover_rendered_route_lifecycle_and_offscreen_scroll(self) -> None:
+        ui_test = (
+            SOURCE_PATH.parents[0]
+            / ".."
+            / "SensorSynthFMUITests"
+            / "SensorSynthFMUITests.swift"
+        ).resolve().read_text(encoding="utf-8")
+
+        self.assertIn('app.launchArguments = ["-ui-testing"]', ui_test)
+        self.assertIn('modulation.cell.source.3.target.0', ui_test)
+        self.assertIn('SELECTED · NEUTRAL', ui_test)
+        self.assertIn('modulation.amount.increase', ui_test)
+        self.assertIn('modulation.route.remove', ui_test)
+        self.assertIn('modulation.cell.source.8.target.0', ui_test)
+        self.assertIn('modulation.matrix.viewport', ui_test)
+        self.assertIn('modulation.target.0', ui_test)
+        self.assertIn('modulation.selected.route.context', ui_test)
+
     def test_selected_route_cluster_exposes_live_source_and_state(self) -> None:
         editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))
 
