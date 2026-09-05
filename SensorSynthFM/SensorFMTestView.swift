@@ -551,6 +551,7 @@ struct SensorFMTestView: View {
             .buttonStyle(.plain)
             .opacity(ModulationAmountInteraction.isZero(amount) ? 0 : 1)
             .allowsHitTesting(!ModulationAmountInteraction.isZero(amount))
+            .disabled(ModulationAmountInteraction.isZero(amount))
             .accessibilityHidden(ModulationAmountInteraction.isZero(amount))
             .accessibilityLabel("Remove selected modulation route")
             .accessibilityHint("Clears only the selected route and returns it to zero")

@@ -68,6 +68,7 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         self.assertNotIn('if !ModulationAmountInteraction.isZero(amount)', editor)
         self.assertIn('.opacity(ModulationAmountInteraction.isZero(amount) ? 0 : 1)', editor)
         self.assertIn('.allowsHitTesting(!ModulationAmountInteraction.isZero(amount))', editor)
+        self.assertIn('.disabled(ModulationAmountInteraction.isZero(amount))', editor)
 
         cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
         self.assertIn(".onTapGesture(count: 2)", cell)
