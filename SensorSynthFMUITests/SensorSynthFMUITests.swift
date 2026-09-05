@@ -56,7 +56,7 @@ final class SensorSynthFMUITests: XCTestCase {
         )
         XCTAssertTrue(editor.exists, "Removing a route must not remove the editor")
         XCTAssertTrue(amountControl.exists, "Removing a route must not remove amount control")
-        XCTAssertFalse(remove.waitForExistence(timeout: 0.5), "Neutral routes should hide removal")
+        XCTAssertFalse(remove.isHittable, "Neutral routes should disable removal without collapsing its layout slot")
     }
 
     @MainActor
