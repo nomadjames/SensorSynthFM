@@ -104,6 +104,16 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         self.assertIn('modulation.route.remove', editor)
         self.assertIn('modulation.amount.increase', self.source)
         self.assertIn('modulation.amount.decrease', self.source)
+        self.assertIn('.accessibilityElement(children: .contain)', editor)
+        amount_control = re.sub(
+            r"\s+",
+            " ",
+            self.source[
+                self.source.index("private struct BipolarAmountControl") :
+                self.source.index("private struct SensorBar")
+            ],
+        )
+        self.assertIn('.accessibilityIdentifier("modulation.amount.slider")', amount_control)
 
     def test_ui_tests_cover_rendered_route_lifecycle_and_offscreen_scroll(self) -> None:
         ui_test = (

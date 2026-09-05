@@ -562,7 +562,6 @@ struct SensorFMTestView: View {
             ) {
                 zeroDetentHapticTick.toggle()
             }
-            .accessibilityIdentifier("modulation.amount.slider")
 
             HStack(spacing: 8) {
                 Text("BASE \(format(selectedTarget, bridge.baseValue(for: selectedTarget)))")
@@ -589,6 +588,7 @@ struct SensorFMTestView: View {
         .padding(10)
         .background(SynthColors.background.opacity(0.55))
         .cornerRadius(8)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("modulation.route.editor")
     }
 
@@ -957,6 +957,7 @@ private struct BipolarAmountControl: View {
         }
         .frame(height: 44)
         .accessibilityElement(children: .ignore)
+        .accessibilityIdentifier("modulation.amount.slider")
         .accessibilityLabel("Modulation amount")
         .accessibilityValue(amountText)
         .accessibilityHint("Swipe up or down to adjust by one percent")
