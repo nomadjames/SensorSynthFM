@@ -61,8 +61,9 @@ final class SensorSynthFMUITests: XCTestCase {
     func testSingleTouchPressDragReleaseLifecycle() throws {
         let surface = element(withIdentifier: "performance.note.surface")
         XCTAssertTrue(surface.waitForExistence(timeout: 5))
+        let start = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
         let destination = surface.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
-        surface.press(forDuration: 0.1, thenDragTo: destination)
+        start.press(forDuration: 0.1, thenDragTo: destination)
         XCTAssertTrue(element(withIdentifier: "performance.active.voice.count").exists)
         element(withIdentifier: "performance.release.touches").tap()
     }
