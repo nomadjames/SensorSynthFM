@@ -137,7 +137,7 @@ final class FMEngine {
             : 0
         voice.oscillator.$baseFrequency.ramp(
             to: AUValue(voice.frequency),
-            duration: boundedRampMilliseconds / 1000.0
+            duration: Float(boundedRampMilliseconds / 1000.0)
         )
         lastPitchRampMilliseconds = boundedRampMilliseconds
         publishVoiceState()
