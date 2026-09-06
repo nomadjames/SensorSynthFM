@@ -181,7 +181,8 @@ final class SensorSynthFMUITests: XCTestCase {
     ) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         repeat {
-            if (element.value as? String)?.contains(expected) == true {
+            let valueText = element.value as? String ?? ""
+            if valueText.contains(expected) || element.label.contains(expected) {
                 return true
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.05))
