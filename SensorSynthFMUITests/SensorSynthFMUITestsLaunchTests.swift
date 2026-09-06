@@ -26,7 +26,7 @@ final class SensorSynthFMUITestsLaunchTests: XCTestCase {
 
         XCTAssertTrue(
             app.descendants(matching: .any)
-                .matching(identifier: "performance.note.surface")
+                .matching(identifier: "performance.note.surface.container")
                 .firstMatch
                 .waitForExistence(timeout: 5)
         )

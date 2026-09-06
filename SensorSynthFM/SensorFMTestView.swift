@@ -52,6 +52,12 @@ struct SensorFMTestView: View {
     @State private var zeroDetentHapticTick = false
     @State private var showMatrix = false
     @State private var noteState = NoteEntryState()
+    @State private var beganTouchCount = 0
+    @State private var movedTouchCount = 0
+    @State private var releasedTouchCount = 0
+    @State private var lastTouchEvent = "IDLE"
+    @State private var firstTouchPitch: Double?
+    @State private var lastTouchPitch: Double?
     @AppStorage("SensorFMTestView.controlHand") private var controlHand = "right"
 
     private var isLeftHanded: Bool { controlHand == "left" }
@@ -91,12 +97,9 @@ struct SensorFMTestView: View {
             bridge.start(sensors: sensors, engine: engine, sceneAnalyzer: sceneAnalyzer)
             startSceneFingerprintUpdates()
         }
-        .onChange(of: showMatrix) { _, matrixIsVisible in
-            bridge.performanceMode = !matrixIsVisible
-        }
         .onDisappear {
             stopSceneFingerprintUpdates()
-            noteState.releaseAll(reason: "view disappeared")
+            releaseAllTouches(reason: "view disappeared")
             bridge.stop()
             sensors.stop()
             engine.stop()
@@ -360,7 +363,9 @@ struct SensorFMTestView: View {
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundColor(SynthColors.textPrimary)
                 Text("PITCH \(noteState.mode == .quantized ? "QUANTIZED" : "FREEHAND")")
+                    .accessibilityIdentifier("performance.pitch.mode")
                 Text(noteState.rangeLabel)
+                    .accessibilityIdentifier("performance.pitch.range")
                 Text("VOICES \(noteState.activeVoiceCount)/\(FMEngine.voiceCapacity)")
                     .accessibilityIdentifier("performance.active.voice.count")
                 Spacer(minLength: 0)
@@ -431,8 +436,28 @@ struct SensorFMTestView: View {
             }
             .font(.system(size: 9, weight: .bold, design: .monospaced))
             .foregroundColor(SynthColors.textSecondary)
+
+            Text(touchDiagnosticText)
+                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+                .accessibilityIdentifier("performance.touch.lifecycle")
+                .accessibilityValue(touchDiagnosticText)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var touchDiagnosticText: String {
+        let first = firstTouchPitch.map { String(Int($0.rounded())) } ?? "--"
+        let last = lastTouchPitch.map { String(Int($0.rounded())) } ?? "--"
+        let changed: Bool
+        if let firstTouchPitch, let lastTouchPitch {
+            changed = abs(firstTouchPitch - lastTouchPitch) > 0.000_001
+        } else {
+            changed = false
+        }
+        return "TOUCH B\(beganTouchCount) M\(movedTouchCount) R\(releasedTouchCount) · LAST \(lastTouchEvent) · PITCH \(first)→\(last) · PITCH CHANGED \(changed ? "YES" : "NO")"
     }
 
     private var controlRail: some View {
@@ -470,7 +495,7 @@ struct SensorFMTestView: View {
                 releaseAllTouches(reason: "manual release")
             }
             railButton("MATRIX", identifier: "performance.matrix", active: false) {
-                showMatrix = true
+                enterMatrixMode()
             }
 
             Text("CONTROL HAND")
@@ -517,7 +542,7 @@ struct SensorFMTestView: View {
     private var matrixReturnBar: some View {
         HStack {
             Button {
-                showMatrix = false
+                returnToPerformanceMode()
             } label: {
                 Text("PERFORMANCE")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
@@ -536,6 +561,20 @@ struct SensorFMTestView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(SynthColors.surface)
+    }
+
+    private func enterMatrixMode() {
+        releaseAllTouches(reason: "entering matrix")
+        engine.noteOff()
+        bridge.performanceMode = false
+        showMatrix = true
+    }
+
+    private func returnToPerformanceMode() {
+        releaseAllTouches(reason: "returning to performance")
+        engine.noteOff()
+        bridge.performanceMode = true
+        showMatrix = false
     }
 
     private func laneLabel(_ lane: Int) -> String {
@@ -575,9 +614,11 @@ struct SensorFMTestView: View {
         switch event {
         case let .began(id, normalizedY):
             guard let touch = noteState.beginTouch(id: id, normalizedY: normalizedY) else { return }
+            recordBegan(touch)
             engine.noteOn(voiceID: touch.voiceID, frequency: touch.target.frequency)
         case let .moved(id, normalizedX, normalizedY):
             guard let touch = noteState.moveTouch(id: id, normalizedX: normalizedX, normalizedY: normalizedY) else { return }
+            recordMoved(touch)
             engine.setFrequency(
                 voiceID: touch.voiceID,
                 frequency: touch.target.frequency,
@@ -585,14 +626,36 @@ struct SensorFMTestView: View {
             )
         case let .ended(id), let .cancelled(id):
             guard let touch = noteState.endTouch(id: id) else { return }
+            recordReleased(touchCount: 1)
             engine.noteOff(voiceID: touch.voiceID)
         case let .releaseAll(reason):
             releaseAllTouches(reason: reason)
         }
     }
 
+    private func recordBegan(_ touch: NoteTouch) {
+        beganTouchCount += 1
+        lastTouchEvent = "BEGAN"
+        firstTouchPitch = firstTouchPitch ?? touch.pitch
+        lastTouchPitch = touch.pitch
+    }
+
+    private func recordMoved(_ touch: NoteTouch) {
+        movedTouchCount += 1
+        lastTouchEvent = "MOVED"
+        lastTouchPitch = touch.pitch
+    }
+
+    private func recordReleased(touchCount: Int) {
+        releasedTouchCount += touchCount
+        lastTouchEvent = "RELEASED"
+    }
+
     private func releaseAllTouches(reason: String) {
-        _ = noteState.releaseAll(reason: reason)
+        let released = noteState.releaseAll(reason: reason)
+        if !released.isEmpty {
+            recordReleased(touchCount: released.count)
+        }
         engine.releaseAllVoices()
     }
 

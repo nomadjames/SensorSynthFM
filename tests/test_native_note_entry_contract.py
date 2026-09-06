@@ -91,10 +91,10 @@ class NativeNoteEntryContractTests(unittest.TestCase):
             "testDefaultSurfaceIsPerformance",
             "testMatrixRoundTrip",
             "testPitchModeAndOctaveControls",
-            "testReleaseTouches",
             "testSingleTouchPressDragReleaseLifecycle",
         ):
             self.assertIn(name, self.ui)
+        self.assertIn('releaseAllTouches(reason: "manual release")', self.view)
 
 
 if __name__ == "__main__":

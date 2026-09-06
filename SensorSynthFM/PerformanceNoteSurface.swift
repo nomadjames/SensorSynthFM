@@ -36,6 +36,7 @@ public struct PerformanceNoteSurface: UIViewRepresentable {
 public final class NoteEntrySurfaceView: UIView {
     public var onEvent: ((NoteEntrySurfaceEvent) -> Void)?
     private var identifiers: [ObjectIdentifier: String] = [:]
+    private var identifierAllocator = TouchIdentifierAllocator()
     private var backgroundObserver: NSObjectProtocol?
 
     public override init(frame: CGRect) {
@@ -73,8 +74,9 @@ public final class NoteEntrySurfaceView: UIView {
 
     public override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         for touch in touches {
-            let id = identifier(for: touch)
-            identifiers[ObjectIdentifier(touch)] = id
+            let key = ObjectIdentifier(touch)
+            let id = identifiers[key] ?? identifierAllocator.allocate()
+            identifiers[key] = id
             onEvent?(.began(id: id, normalizedY: normalizedY(for: touch)))
         }
     }
@@ -121,10 +123,6 @@ public final class NoteEntrySurfaceView: UIView {
     private func flush(reason: String) {
         identifiers.removeAll(keepingCapacity: true)
         onEvent?(.releaseAll(reason: reason))
-    }
-
-    private func identifier(for touch: UITouch) -> String {
-        "touch-\(ObjectIdentifier(touch).hashValue)"
     }
 
     private func normalizedX(for touch: UITouch) -> Double {

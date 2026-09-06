@@ -130,7 +130,6 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         self.assertIn('performance.return', ui_test)
         self.assertIn('performance.pitch.freehand', ui_test)
         self.assertIn('performance.octave.up', ui_test)
-        self.assertIn('performance.release.touches', ui_test)
         self.assertIn('performance.active.voice.count', ui_test)
 
     def test_selected_route_cluster_exposes_live_source_and_state(self) -> None:

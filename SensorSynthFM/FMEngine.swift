@@ -132,11 +132,14 @@ final class FMEngine {
     func setFrequency(voiceID: Int, frequency: Double, rampMilliseconds: Double = 20.0) {
         guard let voice = voice(for: voiceID), voice.isActive else { return }
         voice.frequency = max(frequency, 20)
-        // FMOscillator exposes an AUParameter-backed frequency setter. Updating
-        // that parameter in place preserves the voice/envelope identity and is
-        // the smallest anti-click transition available without a new graph node.
-        voice.oscillator.baseFrequency = AUValue(voice.frequency)
-        lastPitchRampMilliseconds = rampMilliseconds
+        let boundedRampMilliseconds = rampMilliseconds.isFinite
+            ? min(max(rampMilliseconds, 0), 5_000)
+            : 0
+        voice.oscillator.$baseFrequency.ramp(
+            to: AUValue(voice.frequency),
+            duration: boundedRampMilliseconds / 1000.0
+        )
+        lastPitchRampMilliseconds = boundedRampMilliseconds
         publishVoiceState()
     }
 
@@ -185,3 +188,5 @@ final class FMEngine {
         isPlaying = activeVoiceCount > 0
     }
 }
+
+extension FMEngine: SensorFMParameterSink {}

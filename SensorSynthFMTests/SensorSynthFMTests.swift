@@ -128,6 +128,30 @@ struct SensorSynthFMTests {
         #expect(state.beginTouch(id: "overflow", normalizedY: 0.5) == nil)
     }
 
+    @Test func touchIdentifierAllocatorNeverReusesIdentifiers() {
+        var allocator = TouchIdentifierAllocator()
+        let ids = (0..<3).map { _ in allocator.allocate() }
+        #expect(ids == ["touch-1", "touch-2", "touch-3"])
+        #expect(Set(ids).count == ids.count)
+    }
+
+    @Test func sensorBridgePerformanceModeUsesTimbreOnlySinkPolicy() {
+        let sink = RecordingSensorFMParameterSink()
+        let bridge = SensorFMBridge(parameterSink: sink)
+        bridge.setBaseValue(880, for: .carrierFrequency)
+        #expect(sink.carrierFrequency == 880)
+
+        sink.carrierFrequency = 321
+        bridge.performanceMode = true
+        #expect(sink.carrierFrequency == 321)
+        #expect(sink.modulatorRatio == bridge.outputValue(for: .modulatorRatio))
+        #expect(sink.modulationIndex == bridge.outputValue(for: .modulationIndex))
+        #expect(sink.amplitude == bridge.outputValue(for: .amplitude))
+
+        bridge.performanceMode = false
+        #expect(sink.carrierFrequency == bridge.outputValue(for: .carrierFrequency))
+    }
+
     @Test func passiveSensorUpdatesCannotCreateNotesOrChangeTouchPitch() {
         let state = NoteEntryState()
         let touch = state.beginTouch(id: "manual", normalizedY: 0.25)
@@ -149,5 +173,11 @@ struct SensorSynthFMTests {
         #expect(state.activeTouches.map(\.pitch) == pitches)
         #expect(state.sensorTimbreInfluence == 0.5)
     }
+}
 
+private final class RecordingSensorFMParameterSink: SensorFMParameterSink {
+    var carrierFrequency = 440.0
+    var modulatorRatio = 1.0
+    var modulationIndex = 1.0
+    var amplitude = 0.5
 }

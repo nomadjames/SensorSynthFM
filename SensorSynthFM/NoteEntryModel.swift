@@ -7,6 +7,21 @@
 import Foundation
 import Observation
 
+/// Allocates process-local touch identifiers without deriving identity from a hash.
+/// The allocator never reuses an identifier, so released contacts cannot overlap a
+/// later contact even if UIKit reuses an ObjectIdentifier.
+public struct TouchIdentifierAllocator: Sendable {
+    private var nextID: UInt64 = 0
+
+    public init() {}
+
+    public mutating func allocate() -> String {
+        precondition(nextID < UInt64.max, "Touch identifier allocator exhausted")
+        nextID += 1
+        return "touch-\(nextID)"
+    }
+}
+
 public enum PitchMode: String, CaseIterable, Sendable {
     case quantized
     case freehand

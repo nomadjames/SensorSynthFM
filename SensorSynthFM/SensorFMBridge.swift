@@ -6,6 +6,13 @@
 
 import Foundation
 
+protocol SensorFMParameterSink: AnyObject {
+    var carrierFrequency: Double { get set }
+    var modulatorRatio: Double { get set }
+    var modulationIndex: Double { get set }
+    var amplitude: Double { get set }
+}
+
 @Observable
 final class SensorFMBridge {
 
@@ -45,10 +52,12 @@ final class SensorFMBridge {
     // MARK: - Dependencies (injected)
 
     private weak var sensorManager: SensorManager?
-    private weak var fmEngine: FMEngine?
+    private weak var parameterSink: SensorFMParameterSink?
     private weak var sceneAnalyzer: SceneFingerprintAnalyzer?
 
-    // MARK: - Timer (main-thread polling at 60 Hz)
+    init(parameterSink: SensorFMParameterSink? = nil) {
+        self.parameterSink = parameterSink
+    }
 
     private var updateTimer: Timer?
 
@@ -57,7 +66,7 @@ final class SensorFMBridge {
     /// Attach sensor and engine references and begin polling.
     func start(sensors: SensorManager, engine: FMEngine, sceneAnalyzer: SceneFingerprintAnalyzer? = nil) {
         self.sensorManager = sensors
-        self.fmEngine = engine
+        self.parameterSink = engine
         self.sceneAnalyzer = sceneAnalyzer
         recalculateAndApply()
         scheduleTimer()
@@ -68,7 +77,7 @@ final class SensorFMBridge {
         updateTimer?.invalidate()
         updateTimer = nil
         sensorManager = nil
-        fmEngine = nil
+        parameterSink = nil
         sceneAnalyzer = nil
     }
 
@@ -175,7 +184,7 @@ final class SensorFMBridge {
                 + abs(output.modulationIndex - matrix.baseValue(for: .modulationIndex)) / 10.0
                 + abs(output.amplitude - matrix.baseValue(for: .amplitude))
         )
-        guard let engine = fmEngine else { return }
+        guard let engine = parameterSink else { return }
 
         if performanceMode {
             // Never apply the sensor-resolved carrier in Performance mode:
