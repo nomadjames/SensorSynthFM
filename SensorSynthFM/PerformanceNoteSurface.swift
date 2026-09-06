@@ -42,7 +42,8 @@ public final class NoteEntrySurfaceView: UIView {
         super.init(frame: frame)
         isMultipleTouchEnabled = true
         isOpaque = false
-        accessibilityIdentifier = "performance.note.surface.native"
+        isAccessibilityElement = true
+        accessibilityIdentifier = "performance.note.surface"
         accessibilityTraits = [.allowsDirectInteraction]
         installBackgroundRecovery()
     }
@@ -51,7 +52,8 @@ public final class NoteEntrySurfaceView: UIView {
         super.init(coder: coder)
         isMultipleTouchEnabled = true
         isOpaque = false
-        accessibilityIdentifier = "performance.note.surface.native"
+        isAccessibilityElement = true
+        accessibilityIdentifier = "performance.note.surface"
         accessibilityTraits = [.allowsDirectInteraction]
         installBackgroundRecovery()
     }

@@ -46,6 +46,14 @@ class NativeNoteEntryContractTests(unittest.TestCase):
         self.assertIn("touchesCancelled", self.surface)
         self.assertNotIn("DragGesture", self.surface)
 
+    def test_ui_accessibility_exposes_native_surface_and_rail_children(self):
+        self.assertIn('accessibilityIdentifier = "performance.note.surface"', self.surface)
+        self.assertIn("isAccessibilityElement = true", self.surface)
+        rail_start = self.view.index("private var controlRail")
+        rail_end = self.view.index("private func railButton", rail_start)
+        rail = self.view[rail_start:rail_end]
+        self.assertIn(".accessibilityElement(children: .contain)", rail)
+
     def test_engine_has_fixed_voice_bank_and_legacy_api(self):
         self.assertIn("static let voiceCapacity = 10", self.engine)
         self.assertIn("voiceBank", self.engine)

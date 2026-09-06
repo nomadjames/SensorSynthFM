@@ -490,6 +490,7 @@ struct SensorFMTestView: View {
         .frame(width: 164)
         .background(SynthColors.surface)
         .cornerRadius(10)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("performance.control.rail")
     }
 
