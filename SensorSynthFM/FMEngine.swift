@@ -1,87 +1,88 @@
 // FMEngine.swift
 // SensorSynthFM
 //
-// AudioKit-based FM synthesis engine. Replaces the native AVAudioEngine
-// sine wave from Session 1. Uses AudioKit's FMOscillator node for real
-// FM synthesis with carrier frequency, modulator ratio, modulation index,
-// and amplitude controls.
-//
-// All parameter updates go through AudioKit's node properties, which are
-// backed by AUParameter and are audio-thread safe.
+// AudioKit FM engine with a pre-connected, fixed voice bank. Touch pitch is
+// stored per voice; global FM controls are applied coherently to every voice.
 
 import AudioKit
 import SoundpipeAudioKit
 import AVFoundation
 import Foundation
+import Observation
+
+public struct FMVoiceState: Equatable, Sendable, Identifiable {
+    public let id: Int
+    public var isActive: Bool
+    public var frequency: Double
+}
 
 @Observable
 final class FMEngine {
+    static let voiceCapacity = 10
 
-    // MARK: - Observable state (UI-bound)
+    // MARK: - Observable state
 
-    /// Whether the AudioKit engine is running (audio session active).
     var isRunning = false
-
-    /// Whether a note is currently sounding.
     var isPlaying = false
-
-    /// Carrier frequency in Hz. Range: 20–2000.
-    var carrierFrequency: Double = 440.0 {
-        didSet { applyParameters() }
+    var activeVoiceCount = 0
+    private(set) var voiceStates: [FMVoiceState] = (0..<FMEngine.voiceCapacity).map {
+        FMVoiceState(id: $0, isActive: false, frequency: 440)
     }
+    private(set) var lastPitchRampMilliseconds = 0.0
 
-    /// Modulator frequency expressed as a ratio to carrier. Range: 0.1–20.0.
-    /// Actual modulator frequency = carrierFrequency * modulatorRatio.
-    var modulatorRatio: Double = 1.0 {
-        didSet { applyParameters() }
+    /// Legacy/global carrier value. Active touch voices retain their own pitch.
+    var carrierFrequency: Double = 440.0 { didSet { applyParameters() } }
+    var modulatorRatio: Double = 1.0 { didSet { applyParameters() } }
+    var modulationIndex: Double = 1.0 { didSet { applyParameters() } }
+    var amplitude: Double = 0.5 { didSet { applyParameters() } }
+
+    // MARK: - Fixed graph
+
+    private final class VoiceNode {
+        let id: Int
+        let oscillator: FMOscillator
+        var frequency: Double = 440
+        var isActive = false
+
+        init(id: Int) {
+            self.id = id
+            oscillator = FMOscillator()
+        }
     }
-
-    /// FM modulation index. Controls brightness/harmonic content. Range: 0–10.
-    var modulationIndex: Double = 1.0 {
-        didSet { applyParameters() }
-    }
-
-    /// Output amplitude. Range: 0–1.
-    var amplitude: Double = 0.5 {
-        didSet { applyParameters() }
-    }
-
-    // MARK: - AudioKit internals
 
     private let audioEngine = AudioEngine()
-    private var fmOscillator: FMOscillator?
+    private let voiceBank: [VoiceNode]
+    private var mixer: Mixer?
 
-    // MARK: - Engine lifecycle
+    init() {
+        voiceBank = (0..<Self.voiceCapacity).map { VoiceNode(id: $0) }
+    }
 
-    /// Start the AudioKit engine and create the FM oscillator node.
-    /// Call this once when the view appears.
+    // MARK: - Lifecycle
+
+    /// Creates and connects every voice once. Touches only start/stop existing nodes.
     func start(allowMicrophoneInput: Bool = false) {
         guard !isRunning else { return }
 
         do {
-            // Configure the shared audio session before AudioKit starts.
             if allowMicrophoneInput {
-                try AVAudioSession.sharedInstance().setCategory(.playAndRecord,
-                                                                mode: .measurement,
-                                                                options: [.defaultToSpeaker, .allowBluetoothHFP])
+                try AVAudioSession.sharedInstance().setCategory(
+                    .playAndRecord,
+                    mode: .measurement,
+                    options: [.defaultToSpeaker, .allowBluetoothHFP]
+                )
             } else {
                 try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             }
             try AVAudioSession.sharedInstance().setActive(true)
 
-            // Create the FM oscillator with initial parameter values
-            let osc = FMOscillator()
-            osc.baseFrequency = AUValue(carrierFrequency)
-            osc.carrierMultiplier = 1.0  // Carrier = baseFrequency * 1.0
-            osc.modulatingMultiplier = AUValue(modulatorRatio)
-            osc.modulationIndex = AUValue(modulationIndex)
-            osc.amplitude = AUValue(amplitude)
-
-            self.fmOscillator = osc
-
-            // Connect oscillator to the engine output
-            audioEngine.output = osc
-
+            let graphMixer = Mixer()
+            for voice in voiceBank {
+                configure(voice)
+                graphMixer.addInput(voice.oscillator)
+            }
+            mixer = graphMixer
+            audioEngine.output = graphMixer
             try audioEngine.start()
             isRunning = true
         } catch {
@@ -89,43 +90,98 @@ final class FMEngine {
         }
     }
 
-    /// Stop the AudioKit engine and tear down the audio session.
     func stop() {
-        isPlaying = false
-        fmOscillator?.stop()
+        releaseAllVoices()
+        voiceBank.forEach { $0.oscillator.stop() }
         audioEngine.stop()
+        mixer = nil
         isRunning = false
     }
 
-    // MARK: - Note control
+    // MARK: - Legacy note API
 
-    /// Start sounding. Optionally set carrier frequency at the same time.
+    /// Preserved for the accepted matrix/FM test surface.
     func noteOn(frequency: Double? = nil) {
-        if let freq = frequency {
-            carrierFrequency = freq
-        }
-        fmOscillator?.start()
-        isPlaying = true
+        noteOn(voiceID: 0, frequency: frequency ?? carrierFrequency)
     }
 
-    /// Stop sounding.
+    /// Preserved stop-all behavior for the accepted matrix/FM test surface.
     func noteOff() {
-        fmOscillator?.stop()
-        isPlaying = false
+        releaseAllVoices()
     }
 
-    // MARK: - Parameter application
+    // MARK: - Per-voice note API
 
-    /// Push current parameter values to the AudioKit oscillator node.
-    /// AudioKit's FMOscillator properties are AUParameter-backed,
-    /// so these updates are audio-thread safe.
+    func noteOn(voiceID: Int, frequency: Double) {
+        guard let voice = voice(for: voiceID) else { return }
+        voice.frequency = max(frequency, 20)
+        voice.isActive = true
+        configure(voice)
+        voice.oscillator.start()
+        publishVoiceState()
+    }
+
+    func noteOff(voiceID: Int) {
+        guard let voice = voice(for: voiceID), voice.isActive else { return }
+        voice.isActive = false
+        voice.oscillator.stop()
+        publishVoiceState()
+        applyParameters()
+    }
+
+    func setFrequency(voiceID: Int, frequency: Double, rampMilliseconds: Double = 20.0) {
+        guard let voice = voice(for: voiceID), voice.isActive else { return }
+        voice.frequency = max(frequency, 20)
+        // FMOscillator exposes an AUParameter-backed frequency setter. Updating
+        // that parameter in place preserves the voice/envelope identity and is
+        // the smallest anti-click transition available without a new graph node.
+        voice.oscillator.baseFrequency = AUValue(voice.frequency)
+        lastPitchRampMilliseconds = rampMilliseconds
+        publishVoiceState()
+    }
+
+    func releaseAllVoices() {
+        for voice in voiceBank where voice.isActive {
+            voice.isActive = false
+            voice.oscillator.stop()
+        }
+        publishVoiceState()
+    }
+
+    // MARK: - Parameters
+
+    private func configure(_ voice: VoiceNode) {
+        voice.oscillator.baseFrequency = AUValue(voice.isActive ? voice.frequency : carrierFrequency)
+        voice.oscillator.carrierMultiplier = 1.0
+        voice.oscillator.modulatingMultiplier = AUValue(modulatorRatio)
+        voice.oscillator.modulationIndex = AUValue(modulationIndex)
+        voice.oscillator.amplitude = AUValue(voice.isActive ? amplitude : 0.0)
+    }
+
     private func applyParameters() {
-        guard let osc = fmOscillator else { return }
+        for voice in voiceBank {
+            voice.oscillator.carrierMultiplier = 1.0
+            voice.oscillator.modulatingMultiplier = AUValue(modulatorRatio)
+            voice.oscillator.modulationIndex = AUValue(modulationIndex)
+            voice.oscillator.amplitude = AUValue(voice.isActive ? amplitude : 0.0)
+            if !voice.isActive {
+                voice.oscillator.baseFrequency = AUValue(carrierFrequency)
+            }
+        }
+    }
 
-        osc.baseFrequency = AUValue(carrierFrequency)
-        osc.carrierMultiplier = 1.0
-        osc.modulatingMultiplier = AUValue(modulatorRatio)
-        osc.modulationIndex = AUValue(modulationIndex)
-        osc.amplitude = AUValue(isPlaying ? amplitude : 0.0)
+    private func voice(for id: Int) -> VoiceNode? {
+        guard voiceBank.indices.contains(id) else { return nil }
+        return voiceBank[id]
+    }
+
+    private func publishVoiceState() {
+        voiceStates = voiceBank.map {
+            FMVoiceState(id: $0.id, isActive: $0.isActive, frequency: $0.frequency)
+        }
+        activeVoiceCount = voiceBank.reduce(into: 0) { count, voice in
+            if voice.isActive { count += 1 }
+        }
+        isPlaying = activeVoiceCount > 0
     }
 }

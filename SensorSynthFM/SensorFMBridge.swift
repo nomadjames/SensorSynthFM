@@ -13,6 +13,13 @@ final class SensorFMBridge {
 
     var matrix = SensorModulationMatrix.defaultMatrix()
 
+    /// Performance mode keeps touch pitch authoritative and exposes only a
+    /// bounded, labeled timbral underlay. Matrix mode preserves full routing.
+    var performanceMode = false {
+        didSet { recalculateAndApply() }
+    }
+    private(set) var performanceTimbreAmount: Double = 0.0
+
     // MARK: - Smoothing coefficients (configurable, 0 = frozen, 1 = raw/instant)
 
     /// IIR coefficient for the accelerometer magnitude smoother.
@@ -162,11 +169,27 @@ final class SensorFMBridge {
 
     private func recalculateAndApply() {
         output = matrix.evaluate(sources: sourceValues)
+        performanceTimbreAmount = min(
+            1.0,
+            abs(output.modulatorRatio - matrix.baseValue(for: .modulatorRatio)) / 20.0
+                + abs(output.modulationIndex - matrix.baseValue(for: .modulationIndex)) / 10.0
+                + abs(output.amplitude - matrix.baseValue(for: .amplitude))
+        )
         guard let engine = fmEngine else { return }
-        engine.carrierFrequency = output.carrierFrequency
-        engine.modulatorRatio = output.modulatorRatio
-        engine.modulationIndex = output.modulationIndex
-        engine.amplitude = output.amplitude
+
+        if performanceMode {
+            // Never apply the sensor-resolved carrier in Performance mode:
+            // manual touch pitch is authoritative. These are global timbral
+            // parameters and therefore remain coherent across active voices.
+            engine.modulatorRatio = output.modulatorRatio
+            engine.modulationIndex = output.modulationIndex
+            engine.amplitude = output.amplitude
+        } else {
+            engine.carrierFrequency = output.carrierFrequency
+            engine.modulatorRatio = output.modulatorRatio
+            engine.modulationIndex = output.modulationIndex
+            engine.amplitude = output.amplitude
+        }
     }
 
     // MARK: - DSP helpers (pure, allocation-free)

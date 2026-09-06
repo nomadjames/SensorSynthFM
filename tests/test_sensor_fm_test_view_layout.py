@@ -125,14 +125,13 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         ).resolve().read_text(encoding="utf-8")
 
         self.assertIn('app.launchArguments = ["-ui-testing"]', ui_test)
-        self.assertIn('modulation.cell.source.3.target.0', ui_test)
-        self.assertIn('SELECTED · NEUTRAL', ui_test)
-        self.assertIn('modulation.amount.increase', ui_test)
-        self.assertIn('modulation.route.remove', ui_test)
-        self.assertIn('modulation.cell.source.8.target.0', ui_test)
-        self.assertIn('modulation.matrix.viewport', ui_test)
-        self.assertIn('modulation.target.0', ui_test)
-        self.assertIn('modulation.selected.route.context', ui_test)
+        self.assertIn('performance.note.surface', ui_test)
+        self.assertIn('performance.matrix', ui_test)
+        self.assertIn('performance.return', ui_test)
+        self.assertIn('performance.pitch.freehand', ui_test)
+        self.assertIn('performance.octave.up', ui_test)
+        self.assertIn('performance.release.touches', ui_test)
+        self.assertIn('performance.active.voice.count', ui_test)
 
     def test_selected_route_cluster_exposes_live_source_and_state(self) -> None:
         editor = re.sub(r"\s+", " ", property_body(self.source, "selectedCellEditor"))

@@ -50,6 +50,8 @@ struct SensorFMTestView: View {
     @State private var sceneDescriptorsExpanded = false
     @State private var showDiagnostics = false
     @State private var zeroDetentHapticTick = false
+    @State private var showMatrix = false
+    @State private var noteState = NoteEntryState()
     @AppStorage("SensorFMTestView.controlHand") private var controlHand = "right"
 
     private var isLeftHanded: Bool { controlHand == "left" }
@@ -60,28 +62,41 @@ struct SensorFMTestView: View {
 
     var body: some View {
         GeometryReader { geo in
-            if geo.size.width >= geo.size.height {
-                landscapeModulationSurface
+            if showMatrix {
+                VStack(spacing: 0) {
+                    matrixReturnBar
+                    if geo.size.width >= geo.size.height {
+                        landscapeModulationSurface
+                    } else {
+                        portraitModulationSurface
+                    }
+                }
             } else {
-                portraitModulationSurface
+                performanceSurface
             }
         }
         .background(SynthColors.background.ignoresSafeArea())
         .safeAreaPadding(.top, 8)
+        .safeAreaPadding(.bottom, 18)
         .sheet(isPresented: $showDiagnostics) {
             diagnosticsSheet
         }
         .sensoryFeedback(.selection, trigger: zeroDetentHapticTick)
         .preferredColorScheme(.dark)
         .onAppear {
+            bridge.performanceMode = true
             guard startLiveRuntime else { return }
             sensors.start()
             engine.start(allowMicrophoneInput: true)
             bridge.start(sensors: sensors, engine: engine, sceneAnalyzer: sceneAnalyzer)
             startSceneFingerprintUpdates()
         }
+        .onChange(of: showMatrix) { _, matrixIsVisible in
+            bridge.performanceMode = !matrixIsVisible
+        }
         .onDisappear {
             stopSceneFingerprintUpdates()
+            noteState.releaseAll(reason: "view disappeared")
             bridge.stop()
             sensors.stop()
             engine.stop()
@@ -319,6 +334,265 @@ struct SensorFMTestView: View {
     private func currentSceneKey() -> String? {
         guard let fingerprint = sceneAnalyzer.candidateFingerprint else { return nil }
         return "\(fingerprint.seedHash)-\(fingerprint.mutationCounter)"
+    }
+
+    // MARK: - Performance note entry
+
+    private var performanceSurface: some View {
+        HStack(spacing: 8) {
+            if isLeftHanded {
+                controlRail
+                performanceNoteArea
+            } else {
+                performanceNoteArea
+                controlRail
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
+        .background(SynthColors.background)
+    }
+
+    private var performanceNoteArea: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Text("PERFORMANCE")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundColor(SynthColors.textPrimary)
+                Text("PITCH \(noteState.mode == .quantized ? "QUANTIZED" : "FREEHAND")")
+                Text(noteState.rangeLabel)
+                Text("VOICES \(noteState.activeVoiceCount)/\(FMEngine.voiceCapacity)")
+                    .accessibilityIdentifier("performance.active.voice.count")
+                Spacer(minLength: 0)
+            }
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .foregroundColor(SynthColors.textSecondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.7)
+
+            ZStack {
+                VStack(spacing: 1) {
+                    ForEach(0..<PitchMapper.laneCount, id: \.self) { lane in
+                        HStack(spacing: 8) {
+                            Text(laneLabel(lane))
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(SynthColors.textPrimary)
+                                .frame(width: 58, alignment: .leading)
+                            Text(lane == 0 ? "ROOT" : (lane == 7 ? "OCTAVE" : ""))
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .foregroundColor(SynthColors.textSecondary)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 12)
+                        .background(lane.isMultiple(of: 2) ? SynthColors.surfaceRaised : SynthColors.surface)
+                        .overlay(SynthColors.divider.frame(height: 1), alignment: .bottom)
+                    }
+                }
+
+                PerformanceNoteSurface { event in
+                    handleNoteSurfaceEvent(event)
+                }
+                .accessibilityIdentifier("performance.note.surface")
+
+                GeometryReader { geo in
+                    ForEach(noteState.activeTouches) { touch in
+                        let y = CGFloat(touch.normalizedY) * geo.size.height
+                        HStack(spacing: 6) {
+                            Circle()
+                                .stroke(SynthColors.accent, lineWidth: 3)
+                                .frame(width: 34, height: 34)
+                            Text("V\(touch.voiceID + 1)")
+                                .font(.system(size: 10, weight: .black, design: .monospaced))
+                                .foregroundColor(SynthColors.textPrimary)
+                        }
+                        .padding(4)
+                        .background(SynthColors.accent.opacity(0.18))
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(SynthColors.accent, lineWidth: 1))
+                        .position(x: geo.size.width * 0.53, y: y)
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Active touch voice \(touch.voiceID + 1)")
+                        .accessibilityValue("Pitch \(Int(touch.pitch.rounded()))")
+                    }
+                }
+                .allowsHitTesting(false)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(SynthColors.surface)
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(SynthColors.divider, lineWidth: 1))
+            .accessibilityIdentifier("performance.note.surface.container")
+
+            HStack(spacing: 8) {
+                Text("TOUCH FEEDBACK: ACTIVE HALOS")
+                Spacer(minLength: 0)
+                Text("SENSOR TIMBRE UNDERLAY: \(Int((bridge.performanceTimbreAmount * 100).rounded()))%")
+                    .accessibilityIdentifier("performance.sensor.timbre")
+            }
+            .font(.system(size: 9, weight: .bold, design: .monospaced))
+            .foregroundColor(SynthColors.textSecondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var controlRail: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("OFF-HAND RAIL")
+                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+
+            HStack(spacing: 6) {
+                railButton("QUANTIZED", identifier: "performance.pitch.quantized", active: noteState.mode == .quantized) {
+                    setPitchMode(.quantized)
+                }
+                railButton("FREEHAND", identifier: "performance.pitch.freehand", active: noteState.mode == .freehand) {
+                    setPitchMode(.freehand)
+                }
+            }
+
+            HStack(spacing: 6) {
+                railButton("OCT −", identifier: "performance.octave.down", active: false, disabled: noteState.octaveOffset <= -2) {
+                    setOctaveOffset(noteState.octaveOffset - 1)
+                }
+                railButton("OCT +", identifier: "performance.octave.up", active: false, disabled: noteState.octaveOffset >= 2) {
+                    setOctaveOffset(noteState.octaveOffset + 1)
+                }
+            }
+
+            Text(noteState.rangeLabel)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textPrimary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(SynthColors.surfaceRaised)
+                .cornerRadius(7)
+
+            railButton("RELEASE TOUCHES", identifier: "performance.release.touches", active: false) {
+                releaseAllTouches(reason: "manual release")
+            }
+            railButton("MATRIX", identifier: "performance.matrix", active: false) {
+                showMatrix = true
+            }
+
+            Text("CONTROL HAND")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+            HStack(spacing: 6) {
+                railButton("LEFT", identifier: "performance.hand.left", active: isLeftHanded) {
+                    controlHand = "left"
+                }
+                railButton("RIGHT", identifier: "performance.hand.right", active: !isLeftHanded) {
+                    controlHand = "right"
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(10)
+        .frame(width: 164)
+        .background(SynthColors.surface)
+        .cornerRadius(10)
+        .accessibilityIdentifier("performance.control.rail")
+    }
+
+    private func railButton(
+        _ title: String,
+        identifier: String,
+        active: Bool,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(disabled ? SynthColors.textSecondary : SynthColors.background)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .background(disabled ? SynthColors.divider.opacity(0.3) : (active ? SynthColors.sensorGreen : SynthColors.accent))
+                .cornerRadius(7)
+        }
+        .buttonStyle(.plain)
+        .disabled(disabled)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private var matrixReturnBar: some View {
+        HStack {
+            Button {
+                showMatrix = false
+            } label: {
+                Text("PERFORMANCE")
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(SynthColors.background)
+                    .frame(minWidth: 132, minHeight: 44)
+                    .background(SynthColors.accent)
+                    .cornerRadius(8)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("performance.return")
+            Spacer()
+            Text("MATRIX MODE · PERFORMANCE CONFIGURATION PRESERVED")
+                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(SynthColors.surface)
+    }
+
+    private func laneLabel(_ lane: Int) -> String {
+        let midi = noteState.scale.midiNote(forLane: lane) + noteState.octaveOffset * 12
+        return "\(midiName(midi))"
+    }
+
+    private func midiName(_ midi: Int) -> String {
+        let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+        let octave = midi / 12 - 1
+        return "\(names[((midi % 12) + 12) % 12])\(octave)"
+    }
+
+    private func setPitchMode(_ mode: PitchMode) {
+        noteState.setMode(mode)
+        for touch in noteState.activeTouches {
+            engine.setFrequency(
+                voiceID: touch.voiceID,
+                frequency: touch.target.frequency,
+                rampMilliseconds: NoteEntryState.pitchRemapRampMilliseconds
+            )
+        }
+    }
+
+    private func setOctaveOffset(_ offset: Int) {
+        noteState.setOctaveOffset(offset)
+        for touch in noteState.activeTouches {
+            engine.setFrequency(
+                voiceID: touch.voiceID,
+                frequency: touch.target.frequency,
+                rampMilliseconds: NoteEntryState.pitchRemapRampMilliseconds
+            )
+        }
+    }
+
+    private func handleNoteSurfaceEvent(_ event: NoteEntrySurfaceEvent) {
+        switch event {
+        case let .began(id, normalizedY):
+            guard let touch = noteState.beginTouch(id: id, normalizedY: normalizedY) else { return }
+            engine.noteOn(voiceID: touch.voiceID, frequency: touch.target.frequency)
+        case let .moved(id, normalizedX, normalizedY):
+            guard let touch = noteState.moveTouch(id: id, normalizedX: normalizedX, normalizedY: normalizedY) else { return }
+            engine.setFrequency(
+                voiceID: touch.voiceID,
+                frequency: touch.target.frequency,
+                rampMilliseconds: NoteEntryState.pitchRemapRampMilliseconds
+            )
+        case let .ended(id), let .cancelled(id):
+            guard let touch = noteState.endTouch(id: id) else { return }
+            engine.noteOff(voiceID: touch.voiceID)
+        case let .releaseAll(reason):
+            releaseAllTouches(reason: reason)
+        }
+    }
+
+    private func releaseAllTouches(reason: String) {
+        _ = noteState.releaseAll(reason: reason)
+        engine.releaseAllVoices()
     }
 
     // MARK: - Modulation Matrix

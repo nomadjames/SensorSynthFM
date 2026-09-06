@@ -26,7 +26,7 @@ final class SensorSynthFMUITestsLaunchTests: XCTestCase {
 
         XCTAssertTrue(
             app.descendants(matching: .any)
-                .matching(identifier: "modulation.matrix.viewport")
+                .matching(identifier: "performance.note.surface")
                 .firstMatch
                 .waitForExistence(timeout: 5)
         )
