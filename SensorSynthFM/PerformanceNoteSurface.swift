@@ -8,7 +8,7 @@ import SwiftUI
 import UIKit
 
 public enum NoteEntrySurfaceEvent {
-    case began(id: String, normalizedY: Double)
+    case began(id: String, normalizedX: Double, normalizedY: Double)
     case moved(id: String, normalizedX: Double, normalizedY: Double)
     case ended(id: String)
     case cancelled(id: String)
@@ -45,6 +45,8 @@ public final class NoteEntrySurfaceView: UIView {
         isOpaque = false
         isAccessibilityElement = true
         accessibilityIdentifier = "performance.note.surface"
+        accessibilityLabel = "Performance note surface"
+        accessibilityHint = "Touch or drag vertically to play pitch. Use the Hold control to sustain notes."
         accessibilityTraits = [.allowsDirectInteraction]
         installBackgroundRecovery()
     }
@@ -55,6 +57,8 @@ public final class NoteEntrySurfaceView: UIView {
         isOpaque = false
         isAccessibilityElement = true
         accessibilityIdentifier = "performance.note.surface"
+        accessibilityLabel = "Performance note surface"
+        accessibilityHint = "Touch or drag vertically to play pitch. Use the Hold control to sustain notes."
         accessibilityTraits = [.allowsDirectInteraction]
         installBackgroundRecovery()
     }
@@ -77,7 +81,11 @@ public final class NoteEntrySurfaceView: UIView {
             let key = ObjectIdentifier(touch)
             let id = identifiers[key] ?? identifierAllocator.allocate()
             identifiers[key] = id
-            onEvent?(.began(id: id, normalizedY: normalizedY(for: touch)))
+            onEvent?(.began(
+                id: id,
+                normalizedX: normalizedX(for: touch),
+                normalizedY: normalizedY(for: touch)
+            ))
         }
     }
 

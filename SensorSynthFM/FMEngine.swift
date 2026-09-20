@@ -19,6 +19,7 @@ public struct FMVoiceState: Equatable, Sendable, Identifiable {
 @Observable
 final class FMEngine {
     static let voiceCapacity = 10
+    static let releaseEnvelopeMilliseconds = 180.0
 
     // MARK: - Observable state
 
@@ -43,6 +44,7 @@ final class FMEngine {
         let oscillator: FMOscillator
         var frequency: Double = 440
         var isActive = false
+        var releaseWorkItem: DispatchWorkItem?
 
         init(id: Int) {
             self.id = id
@@ -114,6 +116,8 @@ final class FMEngine {
 
     func noteOn(voiceID: Int, frequency: Double) {
         guard let voice = voice(for: voiceID) else { return }
+        voice.releaseWorkItem?.cancel()
+        voice.releaseWorkItem = nil
         voice.frequency = max(frequency, 20)
         voice.isActive = true
         configure(voice)
@@ -124,9 +128,20 @@ final class FMEngine {
     func noteOff(voiceID: Int) {
         guard let voice = voice(for: voiceID), voice.isActive else { return }
         voice.isActive = false
-        voice.oscillator.stop()
+        voice.oscillator.$amplitude.ramp(
+            to: 0,
+            duration: Float(Self.releaseEnvelopeMilliseconds / 1000.0)
+        )
+        let release = DispatchWorkItem { [weak voice] in
+            voice?.oscillator.stop()
+            voice?.releaseWorkItem = nil
+        }
+        voice.releaseWorkItem = release
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + Self.releaseEnvelopeMilliseconds / 1000.0,
+            execute: release
+        )
         publishVoiceState()
-        applyParameters()
     }
 
     func setFrequency(voiceID: Int, frequency: Double, rampMilliseconds: Double = 20.0) {
@@ -144,7 +159,9 @@ final class FMEngine {
     }
 
     func releaseAllVoices() {
-        for voice in voiceBank where voice.isActive {
+        for voice in voiceBank {
+            voice.releaseWorkItem?.cancel()
+            voice.releaseWorkItem = nil
             voice.isActive = false
             voice.oscillator.stop()
         }
@@ -166,8 +183,12 @@ final class FMEngine {
             voice.oscillator.carrierMultiplier = 1.0
             voice.oscillator.modulatingMultiplier = AUValue(modulatorRatio)
             voice.oscillator.modulationIndex = AUValue(modulationIndex)
-            voice.oscillator.amplitude = AUValue(voice.isActive ? amplitude : 0.0)
-            if !voice.isActive {
+            // Do not overwrite a pending release ramp while the sensor timer
+            // continues to update global timbre parameters.
+            if voice.releaseWorkItem == nil {
+                voice.oscillator.amplitude = AUValue(voice.isActive ? amplitude : 0.0)
+            }
+            if !voice.isActive, voice.releaseWorkItem == nil {
                 voice.oscillator.baseFrequency = AUValue(carrierFrequency)
             }
         }

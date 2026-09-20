@@ -153,6 +153,18 @@ final class SensorSynthFMUITests: XCTestCase {
     }
 
     @MainActor
+    func testHoldControlAndReleasedFeedbackAreAccessible() throws {
+        XCTAssertTrue(element(withIdentifier: "performance.hold").waitForExistence(timeout: 5))
+        XCTAssertTrue(element(withIdentifier: "performance.release.touches").exists)
+        XCTAssertTrue(element(withIdentifier: "performance.note.surface.container").exists)
+        XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.hold"), "Disabled"))
+        element(withIdentifier: "performance.hold").tap()
+        XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.hold"), "Enabled"))
+        XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.note.surface.container"), "ACTIVE HALOS"))
+        element(withIdentifier: "performance.release.touches").tap()
+    }
+
+    @MainActor
     private func openMatrix() {
         XCTAssertTrue(
             element(withIdentifier: "performance.note.surface.container").waitForExistence(timeout: 5)

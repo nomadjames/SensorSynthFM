@@ -52,6 +52,8 @@ struct SensorFMTestView: View {
     @State private var zeroDetentHapticTick = false
     @State private var showMatrix = false
     @State private var noteState = NoteEntryState()
+    @State private var holdControlIsPressed = false
+    @State private var holdPressConsumed = false
     @State private var beganTouchCount = 0
     @State private var movedTouchCount = 0
     @State private var releasedTouchCount = 0
@@ -366,7 +368,7 @@ struct SensorFMTestView: View {
                     .accessibilityIdentifier("performance.pitch.mode")
                 Text(noteState.rangeLabel)
                     .accessibilityIdentifier("performance.pitch.range")
-                Text("VOICES \(noteState.activeVoiceCount)/\(FMEngine.voiceCapacity)")
+                Text("VOICES \(noteState.activeAndHeldVoiceCount)/\(FMEngine.voiceCapacity)")
                     .accessibilityIdentifier("performance.active.voice.count")
                 Spacer(minLength: 0)
             }
@@ -376,21 +378,13 @@ struct SensorFMTestView: View {
             .minimumScaleFactor(0.7)
 
             ZStack {
+                // The note surface is primary. There is deliberately no redundant note gutter.
                 VStack(spacing: 1) {
                     ForEach(0..<PitchMapper.laneCount, id: \.self) { lane in
-                        HStack(spacing: 8) {
-                            Text(laneLabel(lane))
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                .foregroundColor(SynthColors.textPrimary)
-                                .frame(width: 58, alignment: .leading)
-                            Text(lane == 0 ? "ROOT" : (lane == 7 ? "OCTAVE" : ""))
-                                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                                .foregroundColor(SynthColors.textSecondary)
-                            Spacer(minLength: 0)
-                        }
-                        .padding(.horizontal, 12)
-                        .background(lane.isMultiple(of: 2) ? SynthColors.surfaceRaised : SynthColors.surface)
-                        .overlay(SynthColors.divider.frame(height: 1), alignment: .bottom)
+                        Rectangle()
+                            .fill(lane.isMultiple(of: 2) ? SynthColors.surfaceRaised : SynthColors.surface)
+                            .overlay(SynthColors.divider.frame(height: 1), alignment: .bottom)
+                            .accessibilityHidden(true)
                     }
                 }
 
@@ -400,24 +394,73 @@ struct SensorFMTestView: View {
                 .accessibilityIdentifier("performance.note.surface")
 
                 GeometryReader { geo in
+                    // Active touches use a solid circle and an explicit ACTIVE label.
                     ForEach(noteState.activeTouches) { touch in
-                        let y = CGFloat(touch.normalizedY) * geo.size.height
-                        HStack(spacing: 6) {
+                        let point = CGPoint(
+                            x: geo.size.width * CGFloat(touch.normalizedX),
+                            y: geo.size.height * CGFloat(touch.normalizedY)
+                        )
+                        let feedback = NoteFeedbackFormatter.feedback(for: touch.target, mode: noteState.mode)
+                        Circle()
+                            .stroke(SynthColors.accent, lineWidth: 3)
+                            .frame(width: 38, height: 38)
+                            .overlay(Circle().stroke(SynthColors.textPrimary, lineWidth: 1).padding(6))
+                            .position(point)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel("ACTIVE touch voice \(touch.voiceID + 1)")
+                            .accessibilityValue(feedback.label)
+
+                        feedbackLabel("ACTIVE · \(feedback.label)", color: SynthColors.textPrimary)
+                            .position(
+                                x: handednessLabelX(in: geo.size.width),
+                                y: min(max(point.y, 24), geo.size.height - 24)
+                            )
+                            .accessibilityHidden(true)
+                    }
+
+                    // Released indicators are dashed and remain briefly for the deterministic envelope window.
+                    ForEach(noteState.releasedIndicators) { indicator in
+                        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: false)) { timeline in
+                            let point = CGPoint(
+                                x: geo.size.width * CGFloat(indicator.normalizedX),
+                                y: geo.size.height * CGFloat(indicator.normalizedY)
+                            )
+                            let feedback = NoteFeedbackFormatter.feedback(for: indicator.target, mode: noteState.mode)
                             Circle()
-                                .stroke(SynthColors.accent, lineWidth: 3)
-                                .frame(width: 34, height: 34)
-                            Text("V\(touch.voiceID + 1)")
-                                .font(.system(size: 10, weight: .black, design: .monospaced))
-                                .foregroundColor(SynthColors.textPrimary)
+                                .stroke(style: StrokeStyle(lineWidth: 2, dash: [4, 3]))
+                                .foregroundColor(SynthColors.textSecondary)
+                                .frame(width: 30, height: 30)
+                                .position(point)
+                                .opacity(indicator.opacity(at: timeline.date))
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel("RELEASED envelope voice \(indicator.voiceID + 1)")
+                                .accessibilityValue(feedback.label)
                         }
-                        .padding(4)
-                        .background(SynthColors.accent.opacity(0.18))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(SynthColors.accent, lineWidth: 1))
-                        .position(x: geo.size.width * 0.53, y: y)
+                    }
+
+                    // Held markers use the fixed pitch-edge marker, never the old touch X position.
+                    ForEach(noteState.heldNotes.values.sorted { $0.pitch > $1.pitch }) { held in
+                        let markerY = heldMarkerY(for: held, in: geo.size.height)
+                        let edgeX = isLeftHanded ? CGFloat(geo.size.width - 14) : 14
+                        let feedback = NoteFeedbackFormatter.feedback(for: held.target, mode: noteState.mode)
+                        VStack(spacing: 2) {
+                            Rectangle()
+                                .frame(width: 8, height: 24)
+                            Text("HELD")
+                                .font(.system(size: 8, weight: .black, design: .monospaced))
+                            Text(feedback.label)
+                                .font(.system(size: 8, weight: .bold, design: .monospaced))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.5)
+                        }
+                        .foregroundColor(SynthColors.sensorGreen)
+                        .position(x: edgeX, y: markerY)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel("Active touch voice \(touch.voiceID + 1)")
-                        .accessibilityValue("Pitch \(Int(touch.pitch.rounded()))")
+                        .accessibilityLabel("HELD pitch")
+                        .accessibilityValue(feedback.label)
+                        .accessibilityAction(named: Text("Remove held note")) {
+                            removeHeldNote(held)
+                        }
                     }
                 }
                 .allowsHitTesting(false)
@@ -429,7 +472,7 @@ struct SensorFMTestView: View {
             .accessibilityIdentifier("performance.note.surface.container")
 
             HStack(spacing: 8) {
-                Text("TOUCH FEEDBACK: ACTIVE HALOS")
+                Text("ACTIVE HALOS · RELEASED ENVELOPES · HELD EDGE MARKERS")
                 Spacer(minLength: 0)
                 Text("SENSOR TIMBRE UNDERLAY: \(Int((bridge.performanceTimbreAmount * 100).rounded()))%")
                     .accessibilityIdentifier("performance.sensor.timbre")
@@ -446,6 +489,24 @@ struct SensorFMTestView: View {
                 .accessibilityValue(touchDiagnosticText)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func feedbackLabel(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 8, weight: .bold, design: .monospaced))
+            .foregroundColor(color)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 3)
+            .background(SynthColors.background.opacity(0.9))
+            .cornerRadius(4)
+    }
+
+    private func handednessLabelX(in width: CGFloat) -> CGFloat {
+        isLeftHanded ? max(width - 100, 80) : min(100, width - 80)
+    }
+
+    private func heldMarkerY(for held: HeldNote, in height: CGFloat) -> CGFloat {
+        CGFloat(held.normalizedY) * height
     }
 
     private var touchDiagnosticText: String {
@@ -491,7 +552,13 @@ struct SensorFMTestView: View {
                 .background(SynthColors.surfaceRaised)
                 .cornerRadius(7)
 
-            railButton("RELEASE TOUCHES", identifier: "performance.release.touches", active: false) {
+            railButton("HOLD", identifier: "performance.hold", active: noteState.isHoldEnabled, tracksHoldPress: true) {
+                toggleHoldFromControl()
+            }
+            .accessibilityValue(noteState.isHoldEnabled ? "Enabled. Hold while selecting a held pitch to remove it." : "Disabled")
+            .accessibilityHint("Releasing a note while enabled keeps one unattended pitch sounding.")
+
+            railButton("RELEASE ALL", identifier: "performance.release.touches", active: false) {
                 releaseAllTouches(reason: "manual release")
             }
             railButton("MATRIX", identifier: "performance.matrix", active: false) {
@@ -519,14 +586,16 @@ struct SensorFMTestView: View {
         .accessibilityIdentifier("performance.control.rail")
     }
 
+    @ViewBuilder
     private func railButton(
         _ title: String,
         identifier: String,
         active: Bool,
         disabled: Bool = false,
+        tracksHoldPress: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        let button = Button(action: action) {
             Text(title)
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .foregroundColor(disabled ? SynthColors.textSecondary : SynthColors.background)
@@ -537,6 +606,19 @@ struct SensorFMTestView: View {
         .buttonStyle(.plain)
         .disabled(disabled)
         .accessibilityIdentifier(identifier)
+
+        if tracksHoldPress {
+            button.simultaneousGesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { _ in holdControlIsPressed = true }
+                    .onEnded { _ in
+                        holdControlIsPressed = false
+                        DispatchQueue.main.async { holdPressConsumed = false }
+                    }
+            )
+        } else {
+            button
+        }
     }
 
     private var matrixReturnBar: some View {
@@ -589,7 +671,23 @@ struct SensorFMTestView: View {
     }
 
     private func setPitchMode(_ mode: PitchMode) {
-        noteState.setMode(mode)
+        releaseDisplacedHeldNotes(noteState.setMode(mode))
+        refreshPerformanceVoiceFrequencies()
+    }
+
+    private func setOctaveOffset(_ offset: Int) {
+        releaseDisplacedHeldNotes(noteState.setOctaveOffset(offset))
+        refreshPerformanceVoiceFrequencies()
+    }
+
+    private func refreshPerformanceVoiceFrequencies() {
+        for held in noteState.heldNotes.values {
+            engine.setFrequency(
+                voiceID: held.voiceID,
+                frequency: held.target.frequency,
+                rampMilliseconds: NoteEntryState.pitchRemapRampMilliseconds
+            )
+        }
         for touch in noteState.activeTouches {
             engine.setFrequency(
                 voiceID: touch.voiceID,
@@ -599,21 +697,50 @@ struct SensorFMTestView: View {
         }
     }
 
-    private func setOctaveOffset(_ offset: Int) {
-        noteState.setOctaveOffset(offset)
-        for touch in noteState.activeTouches {
-            engine.setFrequency(
-                voiceID: touch.voiceID,
-                frequency: touch.target.frequency,
-                rampMilliseconds: NoteEntryState.pitchRemapRampMilliseconds
-            )
+    private func releaseDisplacedHeldNotes(_ displaced: [HeldNote]) {
+        for held in displaced where !noteState.isVoiceTouched(held.voiceID) {
+            engine.noteOff(voiceID: held.voiceID)
         }
+    }
+
+    private func removeHeldNote(_ held: HeldNote) {
+        guard let removed = noteState.removeHeldNote(id: held.id) else { return }
+        if !noteState.isVoiceTouched(removed.voiceID) {
+            engine.noteOff(voiceID: removed.voiceID)
+        }
+    }
+
+    private func setHoldEnabled(_ enabled: Bool) {
+        let released = noteState.setHoldEnabled(enabled)
+        if !enabled {
+            for held in released {
+                if !noteState.isVoiceTouched(held.voiceID) {
+                    engine.noteOff(voiceID: held.voiceID)
+                }
+            }
+        }
+    }
+
+    private func toggleHoldFromControl() {
+        if holdPressConsumed {
+            holdPressConsumed = false
+            return
+        }
+        setHoldEnabled(!noteState.isHoldEnabled)
     }
 
     private func handleNoteSurfaceEvent(_ event: NoteEntrySurfaceEvent) {
         switch event {
-        case let .began(id, normalizedY):
-            guard let touch = noteState.beginTouch(id: id, normalizedY: normalizedY) else { return }
+        case let .began(id, normalizedX, normalizedY):
+            if holdControlIsPressed, let held = noteState.removeHeldPitch(normalizedY: normalizedY) {
+                // The Hold rail's simultaneous press gesture is the native, testable
+                // "hold control while selecting" removal interaction.
+                engine.noteOff(voiceID: held.voiceID)
+                holdPressConsumed = true
+                lastTouchEvent = "HELD REMOVED"
+                return
+            }
+            guard let touch = noteState.beginTouch(id: id, normalizedX: normalizedX, normalizedY: normalizedY) else { return }
             recordBegan(touch)
             engine.noteOn(voiceID: touch.voiceID, frequency: touch.target.frequency)
         case let .moved(id, normalizedX, normalizedY):
@@ -627,12 +754,22 @@ struct SensorFMTestView: View {
         case let .ended(id), let .cancelled(id):
             guard let touch = noteState.endTouch(id: id) else { return }
             recordReleased(touchCount: 1)
-            engine.noteOff(voiceID: touch.voiceID)
+            if !noteState.isVoiceHeld(touch.voiceID) {
+                engine.noteOff(voiceID: touch.voiceID)
+            }
+            if let indicatorID = noteState.releasedIndicators.last?.id {
+                scheduleReleasedIndicatorClear(id: indicatorID)
+            }
         case let .releaseAll(reason):
             releaseAllTouches(reason: reason)
         }
     }
 
+    private func scheduleReleasedIndicatorClear(id: String) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + NoteEntryState.releasedIndicatorLifetimeMilliseconds / 1000.0) {
+            noteState.removeReleasedIndicator(id: id)
+        }
+    }
     private func recordBegan(_ touch: NoteTouch) {
         beganTouchCount += 1
         lastTouchEvent = "BEGAN"
@@ -652,6 +789,8 @@ struct SensorFMTestView: View {
     }
 
     private func releaseAllTouches(reason: String) {
+        holdControlIsPressed = false
+        holdPressConsumed = false
         let released = noteState.releaseAll(reason: reason)
         if !released.isEmpty {
             recordReleased(touchCount: released.count)
