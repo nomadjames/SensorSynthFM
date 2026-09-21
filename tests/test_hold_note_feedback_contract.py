@@ -89,7 +89,7 @@ class HoldNoteFeedbackContractTests(unittest.TestCase):
         self.assertIn("removeReleasedIndicator(id:", self.view)
 
     def test_physical_review_tuning_keeps_feedback_visible(self):
-        self.assertIn(".frame(width: 52, height: 52)", self.view)
+        self.assertIn(".frame(width: 88, height: 88)", self.view)
         self.assertIn(
             "isLeftHanded ? min(100, width - 80) : max(width - 100, 80)",
             self.view,
@@ -97,6 +97,11 @@ class HoldNoteFeedbackContractTests(unittest.TestCase):
         self.assertIn("releasedIndicatorLifetimeMilliseconds = 350.0", self.model)
         engine = (SWIFT / "FMEngine.swift").read_text(encoding="utf-8")
         self.assertIn("releaseEnvelopeMilliseconds = 350.0", engine)
+        released = self.view[
+            self.view.index("// Released indicators"):
+            self.view.index("// Held markers")
+        ]
+        self.assertIn(".foregroundColor(SynthColors.accent)", released)
 
     def test_ipad_build_is_landscape_only(self):
         project = (ROOT / "SensorSynthFM.xcodeproj" / "project.pbxproj").read_text(encoding="utf-8")

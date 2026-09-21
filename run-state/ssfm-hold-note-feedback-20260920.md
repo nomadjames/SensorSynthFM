@@ -75,6 +75,8 @@ James verified that Hold sustains a released note, same-pitch retrigger does not
 
 Quantized feedback exposed three tuning defects: the 38-point active halo was too easy to lose beneath the finger, the note/Hz label was placed on the playing-arm side, and the 180 ms release indicator disappeared too quickly. The follow-up candidate uses a 52-point halo, reverses the handedness-aware label side, and matches the audio and visual release lifetime at 350 ms. These three corrections require one focused Nomadpad retest.
 
+The first retest confirmed the label side and longer release lifetime. A centered 52-point halo remained hidden beneath a stationary fingertip, and the released ring turned white instead of preserving the active orange briefly. The second follow-up uses an 88-point outer reticle and keeps the dashed released ring orange throughout its 350 ms fade.
+
 ## Remaining human gate
 
 Before accepting or merging, run the Xcode unit/UI suites and the focused Nomadpad review:
