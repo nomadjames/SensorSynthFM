@@ -24,7 +24,7 @@ Repair RED after independent review:
 
 Current deterministic GREEN:
 - Command: `python3 -B -m unittest discover -s tests -p 'test*.py' -v`
-- Result: `Ran 41 tests in 0.009s`, `OK`.
+- Result: `Ran 42 tests in 0.013s`, `OK`.
 - Command: `git diff --check`
 - Result: passed with no output.
 
@@ -68,6 +68,12 @@ Unavailable on Linux:
 ## Review state
 
 The first independent read-only review found seven issues, including four high-severity ownership/mapping defects. The second review found three remaining paths: stale ownership after an occupied merge, stale ownership after remapping, and sensor updates truncating the release ramp. All findings were repaired with new failing contracts before production changes. The final narrow review found no actionable high- or medium-severity defects and marked the diff ready for Mac/Xcode human review.
+
+## Physical iPad review, 2026-09-20
+
+James verified that Hold sustains a released note, same-pitch retrigger does not duplicate it, retargeting is fluid, occupied-pitch merge keeps the destination note, selective removal stops only the selected note, and disabling Hold preserves an actively touched voice until finger release.
+
+Quantized feedback exposed three tuning defects: the 38-point active halo was too easy to lose beneath the finger, the note/Hz label was placed on the playing-arm side, and the 180 ms release indicator disappeared too quickly. The follow-up candidate uses a 52-point halo, reverses the handedness-aware label side, and matches the audio and visual release lifetime at 350 ms. These three corrections require one focused Nomadpad retest.
 
 ## Remaining human gate
 

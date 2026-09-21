@@ -193,7 +193,7 @@ public final class NoteEntryState {
     public static let maxVoices = 10
     public static let hysteresisThreshold = PitchMapper.laneHysteresis
     public static let pitchRemapRampMilliseconds = 20.0
-    public static let releasedIndicatorLifetimeMilliseconds = 180.0
+    public static let releasedIndicatorLifetimeMilliseconds = 350.0
     public static let heldSelectionToleranceNormalized = 1.0 / 16.0
 
     public private(set) var mode: PitchMode = .quantized

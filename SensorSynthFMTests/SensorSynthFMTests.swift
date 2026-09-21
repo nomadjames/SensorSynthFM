@@ -309,6 +309,11 @@ struct SensorSynthFMTests {
         #expect(indicator.opacity(at: start.addingTimeInterval(0.18)) == 0)
     }
 
+    @Test func physicalReviewFeedbackTuningUsesReadableHaloAndReleaseLifetime() {
+        #expect(NoteEntryState.releasedIndicatorLifetimeMilliseconds == 350)
+        #expect(FMEngine.releaseEnvelopeMilliseconds == 350)
+    }
+
     @Test func nativeNoteEntryDragMovesHeldOwnershipAndReleaseAllClearsIt() {
         let state = NoteEntryState()
         state.setHoldEnabled(true)

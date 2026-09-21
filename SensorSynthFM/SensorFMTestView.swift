@@ -403,7 +403,7 @@ struct SensorFMTestView: View {
                         let feedback = NoteFeedbackFormatter.feedback(for: touch.target, mode: noteState.mode)
                         Circle()
                             .stroke(SynthColors.accent, lineWidth: 3)
-                            .frame(width: 38, height: 38)
+                            .frame(width: 52, height: 52)
                             .overlay(Circle().stroke(SynthColors.textPrimary, lineWidth: 1).padding(6))
                             .position(point)
                             .accessibilityElement(children: .ignore)
@@ -502,7 +502,7 @@ struct SensorFMTestView: View {
     }
 
     private func handednessLabelX(in width: CGFloat) -> CGFloat {
-        isLeftHanded ? max(width - 100, 80) : min(100, width - 80)
+        isLeftHanded ? min(100, width - 80) : max(width - 100, 80)
     }
 
     private func heldMarkerY(for held: HeldNote, in height: CGFloat) -> CGFloat {

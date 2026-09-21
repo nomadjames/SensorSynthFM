@@ -19,7 +19,7 @@ public struct FMVoiceState: Equatable, Sendable, Identifiable {
 @Observable
 final class FMEngine {
     static let voiceCapacity = 10
-    static let releaseEnvelopeMilliseconds = 180.0
+    static let releaseEnvelopeMilliseconds = 350.0
 
     // MARK: - Observable state
 
