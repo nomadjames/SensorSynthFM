@@ -80,6 +80,8 @@ class HoldNoteFeedbackContractTests(unittest.TestCase):
         self.assertIn("accessibilityHint =", self.surface)
         self.assertIn("accessibilityAction(named:", self.view)
         self.assertIn("removeHeldNote(id:", self.model)
+        self.assertIn('performance.feedback.legend', self.view)
+        self.assertIn('performance.feedback.legend', self.ui_tests)
 
     def test_released_indicator_fades_and_expires_individually(self):
         for token in ("releasedAt", "func opacity(at", "removeReleasedIndicator"):
@@ -110,6 +112,14 @@ class HoldNoteFeedbackContractTests(unittest.TestCase):
             '"UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";'
         )
         self.assertEqual(project.count(expected), 2)
+        self.assertEqual(project.count("INFOPLIST_KEY_UIRequiresFullScreen = YES;"), 2)
+
+    def test_release_opacity_assertions_allow_floating_point_tolerance(self):
+        test_start = self.swift_tests.index("nativeNoteEntryReleasedIndicatorTracksEnvelopeOpacity")
+        test_end = self.swift_tests.index("physicalReviewFeedbackTuningUsesReadableHalo", test_start)
+        test_body = self.swift_tests[test_start:test_end]
+        self.assertIn("abs(", test_body)
+        self.assertNotIn("addingTimeInterval(0.09)) == 0.5", test_body)
 
     def test_pitch_mapping_is_high_at_top_and_freehand_is_continuous(self):
         self.assertIn("(1.0 - y)", self.model)

@@ -479,6 +479,9 @@ struct SensorFMTestView: View {
             }
             .font(.system(size: 9, weight: .bold, design: .monospaced))
             .foregroundColor(SynthColors.textSecondary)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("performance.feedback.legend")
+            .accessibilityLabel("ACTIVE HALOS · RELEASED ENVELOPES · HELD EDGE MARKERS")
 
             Text(touchDiagnosticText)
                 .font(.system(size: 8, weight: .bold, design: .monospaced))

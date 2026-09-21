@@ -305,8 +305,8 @@ struct SensorSynthFMTests {
         )
 
         #expect(indicator.opacity(at: start) == 1)
-        #expect(indicator.opacity(at: start.addingTimeInterval(0.09)) == 0.5)
-        #expect(indicator.opacity(at: start.addingTimeInterval(0.18)) == 0)
+        #expect(abs(indicator.opacity(at: start.addingTimeInterval(0.09)) - 0.5) < 0.000_001)
+        #expect(indicator.opacity(at: start.addingTimeInterval(0.18)) < 0.000_001)
     }
 
     @Test func physicalReviewFeedbackTuningUsesReadableHaloAndReleaseLifetime() {

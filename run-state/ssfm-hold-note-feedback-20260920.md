@@ -24,7 +24,7 @@ Repair RED after independent review:
 
 Current deterministic GREEN:
 - Command: `python3 -B -m unittest discover -s tests -p 'test*.py' -v`
-- Result: `Ran 42 tests in 0.013s`, `OK`.
+- Result: `Ran 43 tests in 0.009s`, `OK`.
 - Command: `git diff --check`
 - Result: passed with no output.
 
@@ -76,6 +76,8 @@ James verified that Hold sustains a released note, same-pitch retrigger does not
 Quantized feedback exposed three tuning defects: the 38-point active halo was too easy to lose beneath the finger, the note/Hz label was placed on the playing-arm side, and the 180 ms release indicator disappeared too quickly. The follow-up candidate uses a 52-point halo, reverses the handedness-aware label side, and matches the audio and visual release lifetime at 350 ms. These three corrections require one focused Nomadpad retest.
 
 The first retest confirmed the label side and longer release lifetime. A centered 52-point halo remained hidden beneath a stationary fingertip, and the released ring turned white instead of preserving the active orange briefly. The second follow-up uses an 88-point outer reticle and keeps the dashed released ring orange throughout its 350 ms fade.
+
+The first physical-device Xcode run executed 57 tests: 55 passed and two failed. Both failures were test-contract defects rather than app failures. The release-opacity unit test used exact floating-point equality and observed only sub-millionth rounding differences; it now uses bounded tolerance. The Hold accessibility UI test queried the note-surface container for text owned by a separate legend; the legend now has a dedicated accessibility identifier and the UI test targets it directly. The iPad target now declares full-screen operation so landscape-only orientation no longer produces the Xcode warning.
 
 ## Remaining human gate
 

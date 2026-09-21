@@ -160,7 +160,7 @@ final class SensorSynthFMUITests: XCTestCase {
         XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.hold"), "Disabled"))
         element(withIdentifier: "performance.hold").tap()
         XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.hold"), "Enabled"))
-        XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.note.surface.container"), "ACTIVE HALOS"))
+        XCTAssertTrue(waitForValueContaining(element(withIdentifier: "performance.feedback.legend"), "ACTIVE HALOS"))
         element(withIdentifier: "performance.release.touches").tap()
     }
 
