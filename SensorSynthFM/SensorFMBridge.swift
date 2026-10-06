@@ -5,12 +5,11 @@
 // untouched; all writes still go through FMEngine's AudioKit parameter setters.
 
 import Foundation
+import Observation
 
 protocol SensorFMParameterSink: AnyObject {
-    var carrierFrequency: Double { get set }
-    var modulatorRatio: Double { get set }
-    var modulationIndex: Double { get set }
-    var amplitude: Double { get set }
+    func apply(output: SensorModulationOutput, preserveTouchPitch: Bool)
+    func setFilter(mode: FilterMode, bypassed: Bool)
 }
 
 @Observable
@@ -26,6 +25,14 @@ final class SensorFMBridge {
         didSet { recalculateAndApply() }
     }
     private(set) var performanceTimbreAmount: Double = 0.0
+    private(set) var filterMode: FilterMode = .lowPass
+    private(set) var filterBypassed = true
+
+    func setFilter(mode: FilterMode, bypassed: Bool) {
+        filterMode = mode
+        filterBypassed = bypassed
+        parameterSink?.setFilter(mode: mode, bypassed: bypassed)
+    }
 
     // MARK: - Smoothing coefficients (configurable, 0 = frozen, 1 = raw/instant)
 
@@ -59,6 +66,13 @@ final class SensorFMBridge {
         self.parameterSink = parameterSink
     }
 
+    /// Attach parameter controls independently of sensors/live audio (also used by UI tests).
+    func attach(engine: FMEngine) {
+        parameterSink = engine
+        engine.setFilter(mode: filterMode, bypassed: filterBypassed)
+        recalculateAndApply()
+    }
+
     private var updateTimer: Timer?
 
     // MARK: - Lifecycle
@@ -68,6 +82,7 @@ final class SensorFMBridge {
         self.sensorManager = sensors
         self.parameterSink = engine
         self.sceneAnalyzer = sceneAnalyzer
+        engine.setFilter(mode: filterMode, bypassed: filterBypassed)
         recalculateAndApply()
         scheduleTimer()
     }
@@ -186,19 +201,9 @@ final class SensorFMBridge {
         )
         guard let engine = parameterSink else { return }
 
-        if performanceMode {
-            // Never apply the sensor-resolved carrier in Performance mode:
-            // manual touch pitch is authoritative. These are global timbral
-            // parameters and therefore remain coherent across active voices.
-            engine.modulatorRatio = output.modulatorRatio
-            engine.modulationIndex = output.modulationIndex
-            engine.amplitude = output.amplitude
-        } else {
-            engine.carrierFrequency = output.carrierFrequency
-            engine.modulatorRatio = output.modulatorRatio
-            engine.modulationIndex = output.modulationIndex
-            engine.amplitude = output.amplitude
-        }
+        // One bounded parameter frame, not ten property-observer graph walks.
+        // Performance and Instrument retain touch-owned pitch; Matrix retains full routing.
+        engine.apply(output: output, preserveTouchPitch: performanceMode)
     }
 
     // MARK: - DSP helpers (pure, allocation-free)
@@ -206,6 +211,8 @@ final class SensorFMBridge {
     /// One-pole IIR low-pass filter: y[n] = y[n-1] + alpha * (x[n] - y[n-1]).
     @inline(__always)
     private func iir(old: Double, new: Double, alpha: Double) -> Double {
-        old + min(max(alpha, 0), 1) * (new - old)
+        guard new.isFinite else { return old }
+        let boundedAlpha = alpha.isFinite ? min(max(alpha, 0), 1) : 0
+        return old + boundedAlpha * (new - old)
     }
 }

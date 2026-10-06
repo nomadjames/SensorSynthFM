@@ -205,6 +205,7 @@ public final class NoteEntryState {
     public private(set) var lastRecoveryReason: String?
     public private(set) var remapCount = 0
     public private(set) var sensorTimbreInfluence = 0.0
+    private var releaseIndicatorSequence: UInt64 = 0
 
     public let scale: ScaleDefinition
     public let mapper: PitchMapper
@@ -289,9 +290,10 @@ public final class NoteEntryState {
     }
 
     @discardableResult
-    public func endTouch(id: String) -> NoteTouch? {
+    public func endTouch(id: String, latchHold: Bool = true,
+                         releaseMilliseconds: Double = NoteEntryState.releasedIndicatorLifetimeMilliseconds) -> NoteTouch? {
         guard let touch = touches.removeValue(forKey: id) else { return nil }
-        if isHoldEnabled, touch.heldOwnershipID == nil {
+        if latchHold, isHoldEnabled, touch.heldOwnershipID == nil {
             let key = pitchKey(for: touch.target)
             if heldNotes[key] == nil {
                 // Transfer the final pitch to unattended ownership. Assignment is
@@ -305,14 +307,16 @@ public final class NoteEntryState {
             }
         }
         if !isVoiceHeld(touch.voiceID) {
+            releaseIndicatorSequence &+= 1
             releasedIndicators.append(ReleasedNoteIndicator(
-                id: "released-\(touch.voiceID)-\(releasedIndicators.count)",
+                id: "released-\(touch.voiceID)-\(releaseIndicatorSequence)",
                 voiceID: touch.voiceID,
                 normalizedX: touch.normalizedX,
                 normalizedY: touch.normalizedY,
                 target: touch.target,
                 releasedAt: Date(),
-                lifetimeMilliseconds: Self.releasedIndicatorLifetimeMilliseconds
+                lifetimeMilliseconds: releaseMilliseconds.isFinite ? min(max(releaseMilliseconds, 20), 5000)
+                    : Self.releasedIndicatorLifetimeMilliseconds
             ))
         }
         return touch
@@ -326,6 +330,16 @@ public final class NoteEntryState {
         releasedIndicators.removeAll(keepingCapacity: true)
         lastRecoveryReason = reason
         return released
+    }
+
+    /// Page/audition removal releases disappearing contacts without latching new
+    /// Hold notes, and leaves previously latched ownership untouched.
+    @discardableResult
+    public func cancelSurfaceTouches(reason: String) -> [NoteTouch] {
+        let cancelled = activeTouches
+        touches.removeAll(keepingCapacity: true)
+        lastRecoveryReason = reason
+        return cancelled
     }
 
     @discardableResult

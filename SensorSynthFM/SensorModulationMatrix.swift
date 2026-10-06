@@ -1,9 +1,4 @@
-// SensorModulationMatrix.swift
-// SensorSynthFM
-//
-// Small control-thread modulation matrix: source columns, target rows, bipolar cells.
-// Audio render thread is not involved.
-
+// Control-thread catalog and bipolar sensor matrix. Stable IDs: append, never reorder.
 import Foundation
 
 enum SensorModulationSource: Int, CaseIterable, Identifiable {
@@ -18,7 +13,6 @@ enum SensorModulationSource: Int, CaseIterable, Identifiable {
     case deviceStillness
 
     var id: Int { rawValue }
-
     var label: String {
         switch self {
         case .accelMagnitude: return "ACCEL MAG"
@@ -32,59 +26,110 @@ enum SensorModulationSource: Int, CaseIterable, Identifiable {
         case .deviceStillness: return "STILLNESS"
         }
     }
-
     var isSceneDescriptor: Bool { rawValue >= SensorModulationSource.roomEnergy.rawValue }
 }
 
+/// Shared bounds, defaults, units and normalization used by UI, routes and DSP.
 enum SensorModulationTarget: Int, CaseIterable, Identifiable {
     case carrierFrequency
     case modulatorRatio
     case modulationIndex
     case amplitude
+    case ampAttack
+    case ampDecay
+    case ampSustain
+    case ampRelease
+    case filterCutoff
+    case filterResonance
 
     var id: Int { rawValue }
-
     var label: String {
         switch self {
         case .carrierFrequency: return "CARRIER FREQ"
         case .modulatorRatio: return "MOD RATIO"
         case .modulationIndex: return "MOD INDEX"
         case .amplitude: return "AMPLITUDE"
+        case .ampAttack: return "AMP ATTACK"
+        case .ampDecay: return "AMP DECAY"
+        case .ampSustain: return "AMP SUSTAIN"
+        case .ampRelease: return "AMP RELEASE"
+        case .filterCutoff: return "FILTER CUTOFF"
+        case .filterResonance: return "FILTER RES"
         }
     }
-
     var range: ClosedRange<Double> {
         switch self {
         case .carrierFrequency: return 20...2000
         case .modulatorRatio: return 0.1...20
         case .modulationIndex: return 0...10
-        case .amplitude: return 0...1
+        case .amplitude, .ampSustain, .filterResonance: return 0...1
+        case .ampAttack, .ampDecay: return 0.005...5
+        case .ampRelease: return 0.02...5
+        case .filterCutoff: return 20...18_000
         }
     }
-
+    var defaultValue: Double {
+        switch self {
+        case .carrierFrequency: return 440
+        case .modulatorRatio: return 4.25
+        case .modulationIndex: return 0
+        case .amplitude: return 0.1
+        case .ampAttack: return 0.005
+        case .ampDecay: return 0.1
+        case .ampSustain: return 1
+        case .ampRelease: return 0.35
+        case .filterCutoff: return 18_000
+        case .filterResonance: return 0
+        }
+    }
     var step: Double {
         switch self {
-        case .carrierFrequency: return 1
-        case .modulatorRatio: return 0.1
-        case .modulationIndex: return 0.1
-        case .amplitude: return 0.01
+        case .carrierFrequency, .filterCutoff: return 1
+        case .modulatorRatio, .modulationIndex: return 0.1
+        case .amplitude, .ampSustain, .filterResonance: return 0.01
+        case .ampAttack, .ampDecay, .ampRelease: return 0.005
         }
     }
-
     var span: Double { range.upperBound - range.lowerBound }
-
     func normalised(_ value: Double) -> Double {
-        guard span > 0 else { return 0 }
-        return clamp01((clamp(value) - range.lowerBound) / span)
+        let bounded = clamp(value)
+        if self == .filterCutoff {
+            return clamp01(log(bounded / range.lowerBound) / log(range.upperBound / range.lowerBound))
+        }
+        return clamp01((bounded - range.lowerBound) / span)
     }
-
     func denormalised(_ value: Double) -> Double {
-        range.lowerBound + clamp01(value) * span
+        if self == .filterCutoff {
+            return range.lowerBound * pow(range.upperBound / range.lowerBound, clamp01(value))
+        }
+        return range.lowerBound + clamp01(value) * span
     }
-
     func clamp(_ value: Double) -> Double {
-        min(max(value, range.lowerBound), range.upperBound)
+        guard value.isFinite else { return defaultValue }
+        return min(max(value, range.lowerBound), range.upperBound)
     }
+    func formatted(_ value: Double) -> String {
+        let value = clamp(value)
+        switch self {
+        case .carrierFrequency, .filterCutoff: return String(format: "%.0f Hz", value)
+        case .modulatorRatio: return String(format: "%.2f:1", value)
+        case .modulationIndex: return String(format: "%.2f", value)
+        case .amplitude, .ampSustain, .filterResonance: return String(format: "%.0f%%", value * 100)
+        case .ampAttack, .ampDecay, .ampRelease: return String(format: "%.0f ms", value * 1000)
+        }
+    }
+}
+
+enum FilterMode: String, CaseIterable, Identifiable {
+    case lowPass = "LP"
+    case highPass = "HP"
+    case bandPass = "BP"
+    var id: String { rawValue }
+
+    /// Native LP/HP resonance is dB; cap at +6 instead of exposing Apple's +40.
+    static func resonanceDecibels(_ amount: Double) -> Double { clamp01(amount) * 6 }
+    /// Native BP bandwidth is cents: narrower at higher normalized resonance.
+    static func bandwidthCents(_ amount: Double) -> Double { 2400 - clamp01(amount) * 2100 }
 }
 
 struct SensorModulationSourceValues: Equatable {
@@ -111,9 +156,9 @@ struct SensorModulationSourceValues: Equatable {
         case .surfaceImpact: raw = surfaceImpact
         case .deviceStillness: raw = deviceStillness
         }
-        return clamp01(raw)
+        // Invalid bipolar source is neutral, not its negative extreme.
+        return raw.isFinite ? clamp01(raw) : (source == .gyroY ? 0.5 : 0)
     }
-
     func contribution(for source: SensorModulationSource) -> Double {
         let value = value(for: source)
         return source == .gyroY ? (value - 0.5) * 2.0 : value
@@ -121,159 +166,73 @@ struct SensorModulationSourceValues: Equatable {
 }
 
 struct SensorModulationOutput: Equatable {
-    var carrierFrequency: Double
-    var modulatorRatio: Double
-    var modulationIndex: Double
-    var amplitude: Double
-
-    var carrierFrequencyNorm: Double
-    var modulatorRatioNorm: Double
-    var modulationIndexNorm: Double
-    var amplitudeNorm: Double
-
-    var carrierFrequencyClamped: Bool
-    var modulatorRatioClamped: Bool
-    var modulationIndexClamped: Bool
-    var amplitudeClamped: Bool
-
-    func value(for target: SensorModulationTarget) -> Double {
-        switch target {
-        case .carrierFrequency: return carrierFrequency
-        case .modulatorRatio: return modulatorRatio
-        case .modulationIndex: return modulationIndex
-        case .amplitude: return amplitude
-        }
+    struct Resolved: Equatable {
+        let actual: Double
+        let normalised: Double
+        let clamped: Bool
     }
-
-    func normalisedValue(for target: SensorModulationTarget) -> Double {
-        switch target {
-        case .carrierFrequency: return carrierFrequencyNorm
-        case .modulatorRatio: return modulatorRatioNorm
-        case .modulationIndex: return modulationIndexNorm
-        case .amplitude: return amplitudeNorm
-        }
-    }
-
-    func isClamped(_ target: SensorModulationTarget) -> Bool {
-        switch target {
-        case .carrierFrequency: return carrierFrequencyClamped
-        case .modulatorRatio: return modulatorRatioClamped
-        case .modulationIndex: return modulationIndexClamped
-        case .amplitude: return amplitudeClamped
-        }
-    }
+    let values: [Resolved] // indexed by the stable catalog ID
+    var carrierFrequency: Double { value(for: .carrierFrequency) }
+    var modulatorRatio: Double { value(for: .modulatorRatio) }
+    var modulationIndex: Double { value(for: .modulationIndex) }
+    var amplitude: Double { value(for: .amplitude) }
+    func value(for target: SensorModulationTarget) -> Double { values[target.rawValue].actual }
+    func normalisedValue(for target: SensorModulationTarget) -> Double { values[target.rawValue].normalised }
+    func isClamped(_ target: SensorModulationTarget) -> Bool { values[target.rawValue].clamped }
 }
 
 struct SensorModulationMatrix: Equatable {
     private static let sourceCount = SensorModulationSource.allCases.count
     private static let amountCount = SensorModulationTarget.allCases.count * sourceCount
-
     private var amounts: [Double]
-    private var baseCarrierFrequency: Double
-    private var baseModulatorRatio: Double
-    private var baseModulationIndex: Double
-    private var baseAmplitude: Double
+    private var baseValues: [Double]
 
     init(seedDefaults: Bool = true) {
         amounts = Array(repeating: 0, count: Self.amountCount)
-        baseCarrierFrequency = 440
-        baseModulatorRatio = 4.25
-        baseModulationIndex = 0
-        baseAmplitude = 0.1
-
+        baseValues = SensorModulationTarget.allCases.map(\.defaultValue)
         guard seedDefaults else { return }
         setAmount(0.4, source: .accelMagnitude, target: .modulationIndex)
         setAmount(0.75, source: .micAmplitude, target: .amplitude)
         setAmount(3.75 / SensorModulationTarget.modulatorRatio.span, source: .gyroY, target: .modulatorRatio)
     }
-
-    static func defaultMatrix() -> SensorModulationMatrix {
-        SensorModulationMatrix()
-    }
-
+    static func defaultMatrix() -> SensorModulationMatrix { SensorModulationMatrix() }
     func amount(source: SensorModulationSource, target: SensorModulationTarget) -> Double {
         amounts[index(source: source, target: target)]
     }
-
     mutating func setAmount(_ value: Double, source: SensorModulationSource, target: SensorModulationTarget) {
-        amounts[index(source: source, target: target)] = min(max(value, -1), 1)
+        amounts[index(source: source, target: target)] = value.isFinite ? min(max(value, -1), 1) : 0
     }
-
-    func baseValue(for target: SensorModulationTarget) -> Double {
-        switch target {
-        case .carrierFrequency: return baseCarrierFrequency
-        case .modulatorRatio: return baseModulatorRatio
-        case .modulationIndex: return baseModulationIndex
-        case .amplitude: return baseAmplitude
-        }
-    }
-
+    func baseValue(for target: SensorModulationTarget) -> Double { baseValues[target.rawValue] }
     mutating func setBaseValue(_ value: Double, for target: SensorModulationTarget) {
-        let clamped = target.clamp(value)
-        switch target {
-        case .carrierFrequency: baseCarrierFrequency = clamped
-        case .modulatorRatio: baseModulatorRatio = clamped
-        case .modulationIndex: baseModulationIndex = clamped
-        case .amplitude: baseAmplitude = clamped
-        }
+        baseValues[target.rawValue] = target.clamp(value)
     }
-
-    mutating func applyBase(carrierFrequency: Double,
-                            modulatorRatio: Double,
-                            modulationIndex: Double,
-                            amplitude: Double) {
+    mutating func applyBase(carrierFrequency: Double, modulatorRatio: Double, modulationIndex: Double, amplitude: Double) {
         setBaseValue(carrierFrequency, for: .carrierFrequency)
         setBaseValue(modulatorRatio, for: .modulatorRatio)
         setBaseValue(modulationIndex, for: .modulationIndex)
         setBaseValue(amplitude, for: .amplitude)
     }
-
+    /// Scene generation owns only the accepted four FM bases, not envelopes/filter.
     mutating func applyBase(from state: SceneMusicalState) {
-        applyBase(
-            carrierFrequency: state.carrierFrequency,
-            modulatorRatio: state.modulatorRatio,
-            modulationIndex: state.modulationIndex,
-            amplitude: state.amplitude
-        )
+        applyBase(carrierFrequency: state.carrierFrequency, modulatorRatio: state.modulatorRatio,
+                  modulationIndex: state.modulationIndex, amplitude: state.amplitude)
     }
-
     func evaluate(sources: SensorModulationSourceValues) -> SensorModulationOutput {
-        let carrier = evaluate(target: .carrierFrequency, sources: sources)
-        let ratio = evaluate(target: .modulatorRatio, sources: sources)
-        let index = evaluate(target: .modulationIndex, sources: sources)
-        let amplitude = evaluate(target: .amplitude, sources: sources)
-
-        return SensorModulationOutput(
-            carrierFrequency: carrier.actual,
-            modulatorRatio: ratio.actual,
-            modulationIndex: index.actual,
-            amplitude: amplitude.actual,
-            carrierFrequencyNorm: carrier.normalised,
-            modulatorRatioNorm: ratio.normalised,
-            modulationIndexNorm: index.normalised,
-            amplitudeNorm: amplitude.normalised,
-            carrierFrequencyClamped: carrier.clamped,
-            modulatorRatioClamped: ratio.clamped,
-            modulationIndexClamped: index.clamped,
-            amplitudeClamped: amplitude.clamped
-        )
+        SensorModulationOutput(values: SensorModulationTarget.allCases.map { target in
+            var rawNorm = target.normalised(baseValue(for: target))
+            for source in SensorModulationSource.allCases {
+                rawNorm += amount(source: source, target: target) * sources.contribution(for: source)
+            }
+            let bounded = clamp01(rawNorm)
+            return SensorModulationOutput.Resolved(actual: target.denormalised(bounded), normalised: bounded,
+                                                   clamped: abs(bounded - rawNorm) > 0.000_000_1)
+        })
     }
-
-    private func evaluate(target: SensorModulationTarget,
-                          sources: SensorModulationSourceValues) -> (actual: Double, normalised: Double, clamped: Bool) {
-        var rawNorm = target.normalised(baseValue(for: target))
-        for source in SensorModulationSource.allCases {
-            rawNorm += amount(source: source, target: target) * sources.contribution(for: source)
-        }
-        let clampedNorm = clamp01(rawNorm)
-        return (target.denormalised(clampedNorm), clampedNorm, abs(clampedNorm - rawNorm) > 0.000_000_1)
-    }
-
     private func index(source: SensorModulationSource, target: SensorModulationTarget) -> Int {
         target.rawValue * Self.sourceCount + source.rawValue
     }
 }
 
 private func clamp01(_ value: Double) -> Double {
-    min(max(value, 0), 1)
+    value.isFinite ? min(max(value, 0), 1) : 0
 }

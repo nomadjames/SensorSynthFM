@@ -63,11 +63,17 @@ class HoldNoteFeedbackContractTests(unittest.TestCase):
         ):
             self.assertIn(name, self.swift_tests)
 
-    def test_sensor_updates_do_not_truncate_a_pending_release_ramp(self):
+    def test_sensor_updates_do_not_truncate_a_pending_native_release(self):
         engine = (SWIFT / "FMEngine.swift").read_text(encoding="utf-8")
         apply_parameters = engine[engine.index("private func applyParameters"):]
         self.assertIn("voice.releaseWorkItem == nil", apply_parameters)
-        self.assertIn("pending release ramp", apply_parameters)
+        self.assertIn("snapshotted native release", apply_parameters)
+        parameter_body = apply_parameters[:apply_parameters.index("private func setEnabled")]
+        self.assertNotIn("openGate", parameter_body)
+        self.assertNotIn("closeGate", parameter_body)
+        self.assertNotIn(".reset()", parameter_body)
+        self.assertIn("voice.generation == generation", engine)
+        self.assertIn("voice.envelope.closeGate()", engine)
 
     def test_hold_modifier_selection_does_not_toggle_hold_off(self):
         self.assertIn("holdPressConsumed", self.view)
@@ -98,7 +104,9 @@ class HoldNoteFeedbackContractTests(unittest.TestCase):
         )
         self.assertIn("releasedIndicatorLifetimeMilliseconds = 350.0", self.model)
         engine = (SWIFT / "FMEngine.swift").read_text(encoding="utf-8")
-        self.assertIn("releaseEnvelopeMilliseconds = 350.0", engine)
+        catalog = (SWIFT / "SensorModulationMatrix.swift").read_text(encoding="utf-8")
+        self.assertIn("case .ampRelease: return 0.35", catalog)
+        self.assertIn("SensorModulationTarget.ampRelease.defaultValue", engine)
         released = self.view[
             self.view.index("// Released indicators"):
             self.view.index("// Held markers")

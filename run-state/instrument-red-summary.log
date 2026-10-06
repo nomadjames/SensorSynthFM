@@ -1,0 +1,17 @@
+SOURCE-check RED evidence, before implementation, 2026-10-06 EDT.
+Command: python -m unittest discover -s tests -p test_instrument_foundation_contract.py -v
+Condensed from actual instrument-red.log; full failure source dumps omitted.
+
+test_bridge_applies_one_frame_and_real_engine_implements_it ... FAIL
+test_catalog_appends_targets_and_handles_nonfinite_log_cutoff ... FAIL
+test_graph_is_per_voice_native_fixed_and_has_output_safety ... FAIL
+test_icons_and_dependency_lock_match_accepted_baseline ... ok
+test_instrument_is_reachable_and_uses_existing_note_surface ... ERROR (new view absent)
+test_native_behavior_and_ui_tests_are_present_not_claimed_run ... ERROR (new tests absent)
+test_releasing_voice_snapshots_duration_and_rejects_stale_cleanup ... FAIL
+test_touch_only_cancellation_keeps_holds_but_background_panics ... FAIL
+
+Ran 8 tests in 0.040s
+FAILED (failures=5, errors=2)
+
+This is Linux source-contract RED, not native Swift behavioral RED.

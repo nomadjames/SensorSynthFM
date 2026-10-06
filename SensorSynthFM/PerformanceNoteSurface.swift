@@ -13,6 +13,7 @@ public enum NoteEntrySurfaceEvent {
     case ended(id: String)
     case cancelled(id: String)
     case releaseAll(reason: String)
+    case surfaceRemoved
 }
 
 public struct PerformanceNoteSurface: UIViewRepresentable {
@@ -30,6 +31,11 @@ public struct PerformanceNoteSurface: UIViewRepresentable {
 
     public func updateUIView(_ uiView: NoteEntrySurfaceView, context: Context) {
         uiView.onEvent = onEvent
+    }
+
+    public static func dismantleUIView(_ uiView: NoteEntrySurfaceView, coordinator: ()) {
+        uiView.cancelSurfaceContacts()
+        uiView.onEvent = nil
     }
 }
 
@@ -72,7 +78,7 @@ public final class NoteEntrySurfaceView: UIView {
     public override func didMoveToWindow() {
         super.didMoveToWindow()
         if window == nil, !identifiers.isEmpty {
-            flush(reason: "window lost")
+            cancelSurfaceContacts()
         }
     }
 
@@ -131,6 +137,12 @@ public final class NoteEntrySurfaceView: UIView {
     private func flush(reason: String) {
         identifiers.removeAll(keepingCapacity: true)
         onEvent?(.releaseAll(reason: reason))
+    }
+
+    func cancelSurfaceContacts() {
+        guard !identifiers.isEmpty else { return }
+        identifiers.removeAll(keepingCapacity: true)
+        onEvent?(.surfaceRemoved)
     }
 
     private func normalizedX(for touch: UITouch) -> Double {

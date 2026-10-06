@@ -311,7 +311,7 @@ struct SensorSynthFMTests {
 
     @Test func physicalReviewFeedbackTuningUsesReadableHaloAndReleaseLifetime() {
         #expect(NoteEntryState.releasedIndicatorLifetimeMilliseconds == 350)
-        #expect(FMEngine.releaseEnvelopeMilliseconds == 350)
+        #expect(SensorModulationTarget.ampRelease.defaultValue * 1000 == 350)
     }
 
     @Test func nativeNoteEntryDragMovesHeldOwnershipAndReleaseAllClearsIt() {
@@ -347,4 +347,11 @@ private final class RecordingSensorFMParameterSink: SensorFMParameterSink {
     var modulatorRatio = 1.0
     var modulationIndex = 1.0
     var amplitude = 0.5
+    func apply(output: SensorModulationOutput, preserveTouchPitch: Bool) {
+        if !preserveTouchPitch { carrierFrequency = output.carrierFrequency }
+        modulatorRatio = output.modulatorRatio
+        modulationIndex = output.modulationIndex
+        amplitude = output.amplitude
+    }
+    func setFilter(mode: FilterMode, bypassed: Bool) {}
 }

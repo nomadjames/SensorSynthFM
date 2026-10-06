@@ -1,0 +1,32 @@
+{
+  "base": "a28a0203475500ce2029fc6195b2733d10bb63f9",
+  "branch": "work/ssfm-instrument-foundation-20261006",
+  "swift_executable": null,
+  "mac_gate": "NOT APPROVED; no Mac operations performed",
+  "verification_kind": "Linux source checks only",
+  "source_file_count": 14,
+  "sources": {
+    "SensorSynthFM/FMEngine.swift": "22029998ebd604c632dfa8090ba392f4e445fbf3c00e30c426de0d8068009b05",
+    "SensorSynthFM/InstrumentControlsView.swift": "f78c8326a3f80e66bf4c3f97757f933b665f6bab85ab4af1ad27ccb441f49a08",
+    "SensorSynthFM/NoteEntryModel.swift": "bc8c0db0fe87f4ee6478199c45f09468405fbef3c3aadafbc9922e4dc64c905d",
+    "SensorSynthFM/PerformanceNoteSurface.swift": "8b8d3a508c52361e0d29fd52c29a1d5a2a1363d2835c13b2f33afd2c2ccc53df",
+    "SensorSynthFM/SensorFMBridge.swift": "7677314a183ac3502e4aecd6a2353c63cc26f5165167e723267e547771d01514",
+    "SensorSynthFM/SensorFMTestView.swift": "bb97aa8baaea47d6d84bee8338f11709483b5ce7fc00a767c48dc1653d9407d4",
+    "SensorSynthFM/SensorModulationMatrix.swift": "59ea5e23515d2a0f417d6d3efb3a15f4cc40065928b0b744b33d6183bd3ddbb0",
+    "SensorSynthFMTests/InstrumentAudioRenderTests.swift": "e2d317b76733fa6bc00675b0b2b030c464b9f64d10b61fe61a52a68427b11917",
+    "SensorSynthFMTests/InstrumentFoundationTests.swift": "95190b5ef4a2eda01d5f812339e0a02a1c5012914e325d2fd332d7878da00561",
+    "SensorSynthFMTests/SensorSynthFMTests.swift": "fce86e5f4e371c49f794722bce16b793a66f9c7d2cc18c012d8fb304276be31c",
+    "SensorSynthFMUITests/InstrumentFoundationUITests.swift": "488fb69efa1637ec43ecf65af4fa2026a45b4c43b85f4487ddd73ffc2c9c6a0b",
+    "tests/test_hold_note_feedback_contract.py": "d5e2c3fec4357a613edbf4b5c6db38e38294779e081d47de395f6a5ec3a0c7d7",
+    "tests/test_instrument_foundation_contract.py": "6773f94bcab58ff7fa2ca6a125a5c76f6268d8439b7119352c8f1ab39eb27e46",
+    "tests/test_review_repair_contract.py": "6d9400b2e5d1aa5d2d325d51e854ca2611c35506ac466219ea7d34e0353030b4"
+  },
+  "preserved": {
+    "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f",
+    "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-dark.png": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f",
+    "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/Contents.json": "3753a8333b540a48a7693340a359f8ef76b79bfe0138b612b4b14fc2891b9731",
+    "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-tinted.png": "608feb705a28d87962161e7f075c246b83a834198aae969b3e314b68391e684d",
+    "SensorSynthFM.xcodeproj/project.pbxproj": "db91f8c8e2e67bfab4013d93cae3d25ca39f5a17584ca5db682a51cfd29948fc",
+    "SensorSynthFM.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved": "1de357f8a729fffd7c37667a97721e43413aec6d545297ecde3670d483858f3b"
+  }
+}

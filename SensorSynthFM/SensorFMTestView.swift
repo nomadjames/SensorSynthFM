@@ -51,6 +51,9 @@ struct SensorFMTestView: View {
     @State private var showDiagnostics = false
     @State private var zeroDetentHapticTick = false
     @State private var showMatrix = false
+    @State private var showInstrument = false
+    @State private var showAudition = true
+    @Environment(\.scenePhase) private var scenePhase
     @State private var noteState = NoteEntryState()
     @State private var holdControlIsPressed = false
     @State private var holdPressConsumed = false
@@ -79,6 +82,8 @@ struct SensorFMTestView: View {
                         portraitModulationSurface
                     }
                 }
+            } else if showInstrument {
+                instrumentSurface
             } else {
                 performanceSurface
             }
@@ -93,6 +98,7 @@ struct SensorFMTestView: View {
         .preferredColorScheme(.dark)
         .onAppear {
             bridge.performanceMode = true
+            bridge.attach(engine: engine)
             guard startLiveRuntime else { return }
             sensors.start()
             engine.start(allowMicrophoneInput: true)
@@ -105,6 +111,9 @@ struct SensorFMTestView: View {
             bridge.stop()
             sensors.stop()
             engine.stop()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { releaseAllTouches(reason: "application inactive") }
         }
     }
 
@@ -343,6 +352,45 @@ struct SensorFMTestView: View {
 
     // MARK: - Performance note entry
 
+    private var instrumentSurface: some View {
+        HStack(spacing: 8) {
+            if isLeftHanded { controlRail }
+            VStack(spacing: 8) {
+                HStack {
+                    Text("INSTRUMENT")
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .accessibilityIdentifier("instrument.page.title")
+                    Spacer()
+                    Button(showAudition ? "HIDE AUDITION" : "SHOW AUDITION") {
+                        cancelSurfaceTouches(reason: "audition visibility changed")
+                        showAudition.toggle()
+                    }
+                    .frame(minWidth: 132, minHeight: 44)
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("instrument.audition.toggle")
+                    .accessibilityValue(showAudition ? "Shown" : "Hidden")
+                }
+                .foregroundColor(SynthColors.textPrimary)
+                .padding(.horizontal, 12)
+                InstrumentControlsView(bridge: bridge)
+                    .frame(maxHeight: .infinity)
+                if showAudition {
+                    performanceNoteArea
+                        .frame(height: 220)
+                } else {
+                    Text("Audition hidden · \(noteState.heldNotes.count) HELD · RELEASE ALL stays on the rail")
+                        .font(.caption)
+                        .foregroundColor(SynthColors.textSecondary)
+                        .accessibilityIdentifier("instrument.hidden.held.count")
+                }
+            }
+            if !isLeftHanded { controlRail }
+        }
+        .padding(.horizontal, 10)
+        .padding(.bottom, 8)
+        .accessibilityIdentifier("instrument.page")
+    }
+
     private var performanceSurface: some View {
         HStack(spacing: 8) {
             if isLeftHanded {
@@ -361,7 +409,7 @@ struct SensorFMTestView: View {
     private var performanceNoteArea: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
-                Text("PERFORMANCE")
+                Text(showInstrument ? "AUDITION" : "PERFORMANCE")
                     .font(.system(size: 12, weight: .bold, design: .monospaced))
                     .foregroundColor(SynthColors.textPrimary)
                 Text("PITCH \(noteState.mode == .quantized ? "QUANTIZED" : "FREEHAND")")
@@ -567,6 +615,10 @@ struct SensorFMTestView: View {
             railButton("MATRIX", identifier: "performance.matrix", active: false) {
                 enterMatrixMode()
             }
+            railButton(showInstrument ? "PERFORMANCE" : "INSTRUMENT",
+                       identifier: showInstrument ? "instrument.performance" : "performance.instrument", active: false) {
+                if showInstrument { returnToPerformanceMode() } else { enterInstrumentMode() }
+            }
 
             Text("CONTROL HAND")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -638,6 +690,14 @@ struct SensorFMTestView: View {
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("performance.return")
+            railButton("INSTRUMENT", identifier: "matrix.instrument", active: false) {
+                enterInstrumentMode()
+            }
+            .frame(width: 132)
+            railButton("RELEASE ALL", identifier: "matrix.release.all", active: false) {
+                releaseAllTouches(reason: "manual matrix release")
+            }
+            .frame(width: 132)
             Spacer()
             Text("MATRIX MODE · PERFORMANCE CONFIGURATION PRESERVED")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
@@ -652,14 +712,42 @@ struct SensorFMTestView: View {
         releaseAllTouches(reason: "entering matrix")
         engine.noteOff()
         bridge.performanceMode = false
+        showInstrument = false
         showMatrix = true
     }
 
     private func returnToPerformanceMode() {
-        releaseAllTouches(reason: "returning to performance")
-        engine.noteOff()
+        if showInstrument {
+            cancelSurfaceTouches(reason: "leaving instrument")
+        } else {
+            releaseAllTouches(reason: "returning to performance")
+            engine.noteOff()
+        }
         bridge.performanceMode = true
         showMatrix = false
+        showInstrument = false
+    }
+
+    private func enterInstrumentMode() {
+        if showMatrix {
+            releaseAllTouches(reason: "entering instrument from matrix")
+            engine.noteOff()
+        } else {
+            cancelSurfaceTouches(reason: "entering instrument")
+        }
+        bridge.performanceMode = true
+        showMatrix = false
+        showInstrument = true
+    }
+
+    private func cancelSurfaceTouches(reason: String) {
+        holdControlIsPressed = false
+        holdPressConsumed = false
+        let cancelled = noteState.cancelSurfaceTouches(reason: reason)
+        for touch in cancelled where !noteState.isVoiceHeld(touch.voiceID) {
+            engine.noteOff(voiceID: touch.voiceID)
+        }
+        if !cancelled.isEmpty { recordReleased(touchCount: cancelled.count) }
     }
 
     private func laneLabel(_ lane: Int) -> String {
@@ -754,22 +842,31 @@ struct SensorFMTestView: View {
                 frequency: touch.target.frequency,
                 rampMilliseconds: NoteEntryState.pitchRemapRampMilliseconds
             )
-        case let .ended(id), let .cancelled(id):
-            guard let touch = noteState.endTouch(id: id) else { return }
-            recordReleased(touchCount: 1)
-            if !noteState.isVoiceHeld(touch.voiceID) {
-                engine.noteOff(voiceID: touch.voiceID)
-            }
-            if let indicatorID = noteState.releasedIndicators.last?.id {
-                scheduleReleasedIndicatorClear(id: indicatorID)
-            }
+        case let .ended(id):
+            endSurfaceTouch(id: id, latchHold: true)
+        case let .cancelled(id):
+            endSurfaceTouch(id: id, latchHold: false)
+        case .surfaceRemoved:
+            cancelSurfaceTouches(reason: "note surface removed")
         case let .releaseAll(reason):
             releaseAllTouches(reason: reason)
         }
     }
 
-    private func scheduleReleasedIndicatorClear(id: String) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + NoteEntryState.releasedIndicatorLifetimeMilliseconds / 1000.0) {
+    private func endSurfaceTouch(id: String, latchHold: Bool) {
+        guard let touch = noteState.endTouch(id: id, latchHold: latchHold,
+                                            releaseMilliseconds: bridge.outputValue(for: .ampRelease) * 1000) else { return }
+        recordReleased(touchCount: 1)
+        if !noteState.isVoiceHeld(touch.voiceID) {
+            engine.noteOff(voiceID: touch.voiceID)
+        }
+        if let indicator = noteState.releasedIndicators.last {
+            scheduleReleasedIndicatorClear(id: indicator.id, milliseconds: indicator.lifetimeMilliseconds)
+        }
+    }
+
+    private func scheduleReleasedIndicatorClear(id: String, milliseconds: Double) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + milliseconds / 1000.0) {
             noteState.removeReleasedIndicator(id: id)
         }
     }
@@ -811,7 +908,7 @@ struct SensorFMTestView: View {
                     .foregroundColor(SynthColors.textPrimary)
                 Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
-                    Text("9 SOURCES · SWIPE")
+                    Text("9 SOURCES · 10 TARGETS · SWIPE")
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
                         .foregroundColor(SynthColors.accent)
                     Text("\(selectedSource.label) → \(selectedTarget.label)")
@@ -897,6 +994,9 @@ struct SensorFMTestView: View {
             Text(target.label)
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
                 .foregroundColor(selected ? SynthColors.accent : SynthColors.textPrimary)
+            Text("BASE \(format(target, bridge.baseValue(for: target)))")
+                .font(.system(size: 8, design: .monospaced))
+                .foregroundColor(SynthColors.textSecondary)
             Text("LIVE \(format(target, bridge.outputValue(for: target)))")
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundColor(bridge.outputIsClamped(target) ? Color.red.opacity(0.9) : SynthColors.textSecondary)
@@ -1367,12 +1467,7 @@ struct SensorFMTestView: View {
     }
 
     private func format(_ target: SensorModulationTarget, _ value: Double) -> String {
-        switch target {
-        case .carrierFrequency: return "\(Int(value.rounded())) Hz"
-        case .modulatorRatio: return String(format: "%.2f:1", value)
-        case .modulationIndex: return String(format: "%.2f", value)
-        case .amplitude: return "\(Int((value * 100).rounded()))%"
-        }
+        target.formatted(value)
     }
 
     private func color(for source: SensorModulationSource) -> Color {

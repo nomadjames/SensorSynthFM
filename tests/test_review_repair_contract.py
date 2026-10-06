@@ -97,10 +97,12 @@ class ReviewRepairContractTests(unittest.TestCase):
         self.assertIn("extension FMEngine: SensorFMParameterSink", self.engine)
         self.assertIn("sensorBridgePerformanceModeUsesTimbreOnlySinkPolicy", self.swift_tests)
         self.assertNotRegex(self.bridge, r"noteOn|noteOff")
-        self.assertIn("if performanceMode", self.bridge)
-        self.assertIn("engine.modulatorRatio", self.bridge)
-        self.assertIn("engine.modulationIndex", self.bridge)
-        self.assertIn("engine.amplitude", self.bridge)
+        # Coherent frames replace didSet fanout without weakening pitch ownership.
+        self.assertIn("engine.apply(output: output, preserveTouchPitch: performanceMode)", self.bridge)
+        self.assertIn("if !preserveTouchPitch { carrierFrequency = output.carrierFrequency }", self.engine)
+        self.assertIn("modulatorRatio = output.modulatorRatio", self.engine)
+        self.assertIn("modulationIndex = output.modulationIndex", self.engine)
+        self.assertIn("amplitude = output.amplitude", self.engine)
 
 
 if __name__ == "__main__":
