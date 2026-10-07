@@ -105,6 +105,19 @@ struct InstrumentControlsView: View {
 /// Give the native control itself 44-point bounds, not a 31-point SwiftUI Slider
 /// inside a larger layout frame. Track/thumb keep their standard UIKit sizes;
 /// hit testing and accessibility both use the real view bounds.
+/// UISlider's default AX rect follows its thumb height (34pt on iPadOS27).
+/// Advertise the actual view bounds only after making those same bounds hittable.
+/// No scaled track/thumb or fabricated constant accessibility rectangle.
+final class InstrumentUISlider: UISlider {
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        return bounds.contains(point)
+    }
+    override var accessibilityFrame: CGRect {
+        get { UIAccessibility.convertToScreenCoordinates(bounds, in: self) }
+        set { super.accessibilityFrame = newValue }
+    }
+}
+
 private struct InstrumentParameterSlider: UIViewRepresentable {
     @Binding var value: Double
     let label: String
@@ -112,7 +125,7 @@ private struct InstrumentParameterSlider: UIViewRepresentable {
     let identifier: String
 
     func makeUIView(context: Context) -> UISlider {
-        let slider = UISlider()
+        let slider = InstrumentUISlider()
         slider.minimumValue = 0
         slider.maximumValue = 1
         slider.minimumTrackTintColor = UIColor(SynthColors.accent)

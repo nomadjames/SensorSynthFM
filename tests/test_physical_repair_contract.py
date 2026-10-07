@@ -23,7 +23,8 @@ class PhysicalRepairContractTests(unittest.TestCase):
         self.assertIn("func makeUIView(context: Context) -> UISlider", view)
         self.assertIn(".frame(height: 44)", view)
         self.assertNotIn("scaleEffect", view)
-        self.assertNotIn("accessibilityFrame", view)
+        self.assertIn("return bounds.contains(point)", view)
+        self.assertIn("UIAccessibility.convertToScreenCoordinates(bounds, in: self)", view)
 
     def test_instrument_parent_does_not_override_child_identifiers(self):
         view = (ROOT / "SensorSynthFM/SensorFMTestView.swift").read_text()

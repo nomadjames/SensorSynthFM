@@ -1,5 +1,6 @@
 // Native Mac/Xcode-runnable behavior tests. Linux contracts do NOT execute these.
 import Foundation
+import UIKit
 import Testing
 @testable import SensorSynthFM
 
@@ -63,6 +64,15 @@ struct InstrumentFoundationTests {
         bridge.setFilter(mode: .bandPass, bypassed: false)
         #expect(sink.filterMode == .bandPass)
         #expect(!sink.filterBypassed)
+    }
+
+    @Test func nativeSliderHitBoundsMatchAccessibleBounds() {
+        let slider = InstrumentUISlider(frame: CGRect(x: 0, y: 0, width: 240, height: 44))
+        #expect(slider.point(inside: CGPoint(x: 120, y: 1), with: nil))
+        #expect(slider.point(inside: CGPoint(x: 120, y: 43), with: nil))
+        #expect(!slider.point(inside: CGPoint(x: 120, y: -1), with: nil))
+        #expect(slider.accessibilityFrame.height == slider.bounds.height)
+        #expect(slider.accessibilityFrame.height == 44)
     }
 
     @Test func nativeStageEndpointsMatchSelectedDurations() throws {
