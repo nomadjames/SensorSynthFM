@@ -179,7 +179,7 @@ final class InstrumentFoundationUITests: XCTestCase {
         add(attachment)
         // iPadOS27 app-only snapshots can rotate/crop the image. Retain the
         // independent whole-device capture and actual AX hierarchy as well.
-        let screen = XCTAttachment(screenshot: XCUIDevice.shared.screenshot())
+        let screen = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screen.name = name + " full device"
         screen.lifetime = .keepAlways
         add(screen)
