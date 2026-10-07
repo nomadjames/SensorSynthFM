@@ -14,6 +14,21 @@ final class InstrumentFoundationUITests: XCTestCase {
     }
 
     @MainActor
+    func testInstrumentChildrenKeepDistinctAccessibilityIdentifiers() throws {
+        XCTAssertTrue(element("performance.instrument").waitForExistence(timeout: 5))
+        element("performance.instrument").tap()
+        for id in ["instrument.page.title", "instrument.audition.toggle",
+                   "instrument.controls.viewport", "performance.active.voice.count"] {
+            let child = element(id)
+            XCTAssertTrue(child.waitForExistence(timeout: 2), "Child ID must survive Instrument container: \(id)")
+            XCTAssertEqual(child.identifier, id)
+        }
+        element("instrument.audition.toggle").tap()
+        XCTAssertTrue(app.sliders["instrument.parameter.0"].isHittable)
+        XCTAssertTrue(element("instrument.hidden.held.count").exists)
+    }
+
+    @MainActor
     func testInstrumentControlsAndAuditionHoldSurviveNavigation() throws {
         XCTAssertTrue(element("performance.instrument").waitForExistence(timeout: 5))
         element("performance.hold").tap()
@@ -44,6 +59,7 @@ final class InstrumentFoundationUITests: XCTestCase {
         element("performance.hand.right").tap()
         XCTAssertGreaterThan(element("performance.control.rail").frame.minX,
                              element("performance.note.surface.container").frame.minX)
+        keepScreenshot("Instrument right-hand audition and retained Hold")
         element("instrument.performance").tap()
         XCTAssertTrue(element("performance.instrument").waitForExistence(timeout: 2))
         XCTAssertTrue(contains(element("performance.active.voice.count"), "VOICES 1/10"))

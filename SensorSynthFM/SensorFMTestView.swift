@@ -388,7 +388,6 @@ struct SensorFMTestView: View {
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 8)
-        .accessibilityIdentifier("instrument.page")
     }
 
     private var performanceSurface: some View {

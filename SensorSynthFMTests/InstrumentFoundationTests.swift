@@ -65,6 +65,22 @@ struct InstrumentFoundationTests {
         #expect(!sink.filterBypassed)
     }
 
+    @Test func nativeStageEndpointsMatchSelectedDurations() throws {
+        let engine = FMEngine()
+        defer { engine.stop() }
+        // Check actual native parameters against independent endpoint equations,
+        // not against the calibration helper itself.
+        for seconds in [0.02, 0.2, 1.2] {
+            engine.ampAttack = seconds
+            engine.ampDecay = seconds
+            engine.ampRelease = seconds
+            let voice = try #require(engine.diagnostics(voiceID: 0))
+            #expect(abs(exp(-seconds / (0.6 * voice.attack)) - 0.01) < 0.000_01)
+            #expect(abs(exp(-seconds / voice.decay) - 0.01) < 0.000_01)
+            #expect(abs(exp(-seconds / voice.release) - 0.001) < 0.000_01)
+        }
+    }
+
     @Test func realEngineReceivesOneCoherentFrameAndPreservesManualPitch() throws {
         let engine = FMEngine()
         defer { engine.stop() }
@@ -75,7 +91,7 @@ struct InstrumentFoundationTests {
         bridge.setBaseValue(1.2, for: .ampAttack)
         #expect(engine.parameterFrameCount == before + 1)
         let voice = try #require(engine.diagnostics(voiceID: 0))
-        #expect(abs(voice.attack - 1.2) < 0.000_01)
+        #expect(abs(voice.attack - (1.2 / (0.6 * log(100.0)))) < 0.000_01)
         #expect(engine.voiceStates[0].frequency == 333)
         let gateCount = voice.gateOpenCount
         bridge.setBaseValue(1800, for: .carrierFrequency)
@@ -94,7 +110,15 @@ struct InstrumentFoundationTests {
         let nativeValues = [native.attack, native.decay, native.sustain, native.release, native.cutoff,
                             native.resonanceDB / 6]
         for (target, actual) in zip(newTargets, nativeValues) {
-            #expect(abs(actual - bridge.outputValue(for: target)) < 0.001)
+            let uiValue = bridge.outputValue(for: target)
+            let expected: Double
+            switch target {
+            case .ampAttack: expected = uiValue / (0.6 * log(100.0))
+            case .ampDecay: expected = uiValue / log(100.0)
+            case .ampRelease: expected = uiValue / log(1000.0)
+            default: expected = uiValue
+            }
+            #expect(abs(actual - expected) < 0.001)
         }
         #expect(native.gateOpenCount == gateCount)
     }
@@ -117,7 +141,7 @@ struct InstrumentFoundationTests {
         }
         let after = try #require(engine.diagnostics(voiceID: 0))
         #expect(after.isReleasing)
-        #expect(abs(after.release - 1.2) < 0.000_01)
+        #expect(abs(after.release - (1.2 / log(1000.0))) < 0.000_01)
         #expect(after.releaseSeconds == release.releaseSeconds)
         #expect(after.oscillatorAmplitude == release.oscillatorAmplitude)
         #expect(after.gateOpenCount == release.gateOpenCount)
@@ -201,8 +225,8 @@ struct InstrumentFoundationTests {
         engine.filterResonance = 100
         engine.setFrequency(voiceID: 0, frequency: .nan)
         let voice = try #require(engine.diagnostics(voiceID: 0))
-        #expect(abs(voice.attack - 0.005) < 0.000_001)
-        #expect(abs(voice.release - 0.35) < 0.000_001)
+        #expect(abs(voice.attack - (0.005 / (0.6 * log(100.0)))) < 0.000_001)
+        #expect(abs(voice.release - (0.35 / log(1000.0))) < 0.000_001)
         #expect(voice.cutoff == 18_000)
         #expect(voice.resonanceDB == 6)
         #expect(engine.voiceStates[0].frequency == 440)

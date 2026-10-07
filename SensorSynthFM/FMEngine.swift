@@ -32,6 +32,22 @@ struct FMVoiceDiagnostics {
     let bandwidthCents: Double
 }
 
+/// Soundpipe 5.7.4 exposes exponential time constants, not complete stage lengths.
+/// UI attack reaches the native 99% transition, decay settles 99% toward sustain,
+/// and release reaches 0.1% (-60 dB amplitude) before UI-duration cleanup + slack.
+/// Inputs are bounded in UI seconds before conversion; feedback keeps UI seconds.
+enum EnvelopeStageTiming {
+    static func attack(_ attackSeconds: Double) -> Double {
+        attackSeconds / (0.6 * log(100.0))
+    }
+    static func decay(_ decaySeconds: Double) -> Double {
+        decaySeconds / log(100.0)
+    }
+    static func release(_ releaseSeconds: Double) -> Double {
+        releaseSeconds / log(1000.0)
+    }
+}
+
 @Observable
 final class FMEngine {
     static let voiceCapacity = 10
@@ -78,10 +94,10 @@ final class FMEngine {
         init(id: Int) {
             let oscillator = FMOscillator()
             let envelope = AmplitudeEnvelope(oscillator,
-                attackDuration: AUValue(SensorModulationTarget.ampAttack.defaultValue),
-                decayDuration: AUValue(SensorModulationTarget.ampDecay.defaultValue),
+                attackDuration: AUValue(EnvelopeStageTiming.attack(SensorModulationTarget.ampAttack.defaultValue)),
+                decayDuration: AUValue(EnvelopeStageTiming.decay(SensorModulationTarget.ampDecay.defaultValue)),
                 sustainLevel: AUValue(SensorModulationTarget.ampSustain.defaultValue),
-                releaseDuration: AUValue(SensorModulationTarget.ampRelease.defaultValue))
+                releaseDuration: AUValue(EnvelopeStageTiming.release(SensorModulationTarget.ampRelease.defaultValue)))
             let lowPass = LowPassFilter(envelope)
             let highPass = HighPassFilter(lowPass)
             let bandPass = BandPassFilter(highPass)
@@ -184,7 +200,7 @@ final class FMEngine {
         voice.isActive = false
         let releaseSeconds = SensorModulationTarget.ampRelease.clamp(ampRelease)
         voice.releaseSeconds = releaseSeconds
-        voice.envelope.releaseDuration = AUValue(releaseSeconds)
+        voice.envelope.releaseDuration = AUValue(EnvelopeStageTiming.release(releaseSeconds))
         voice.envelope.closeGate()
         let generation = voice.generation
         let release = DispatchWorkItem { [weak self] in
@@ -274,10 +290,10 @@ final class FMEngine {
             // its snapshotted native release or reset/retrigger the envelope gate.
             if voice.releaseWorkItem == nil {
                 voice.oscillator.amplitude = AUValue(voice.isActive ? SensorModulationTarget.amplitude.clamp(amplitude) : 0)
-                voice.envelope.attackDuration = AUValue(SensorModulationTarget.ampAttack.clamp(ampAttack))
-                voice.envelope.decayDuration = AUValue(SensorModulationTarget.ampDecay.clamp(ampDecay))
+                voice.envelope.attackDuration = AUValue(EnvelopeStageTiming.attack(SensorModulationTarget.ampAttack.clamp(ampAttack)))
+                voice.envelope.decayDuration = AUValue(EnvelopeStageTiming.decay(SensorModulationTarget.ampDecay.clamp(ampDecay)))
                 voice.envelope.sustainLevel = AUValue(SensorModulationTarget.ampSustain.clamp(ampSustain))
-                voice.envelope.releaseDuration = AUValue(SensorModulationTarget.ampRelease.clamp(ampRelease))
+                voice.envelope.releaseDuration = AUValue(EnvelopeStageTiming.release(SensorModulationTarget.ampRelease.clamp(ampRelease)))
             }
             if !voice.isActive, voice.releaseWorkItem == nil {
                 voice.oscillator.baseFrequency = AUValue(SensorModulationTarget.carrierFrequency.clamp(carrierFrequency))
