@@ -26,6 +26,12 @@ class PhysicalRepairContractTests(unittest.TestCase):
         self.assertIn("return bounds.contains(point)", view)
         self.assertIn("UIAccessibility.convertToScreenCoordinates(bounds, in: self)", view)
 
+    def test_representable_explicitly_sizes_the_native_control(self):
+        view = (ROOT / "SensorSynthFM/InstrumentControlsView.swift").read_text()
+        bridge = view[view.index("private struct InstrumentParameterSlider"):]
+        self.assertIn("func sizeThatFits(_ proposal: ProposedViewSize", bridge)
+        self.assertIn("height: 44", bridge[bridge.index("func sizeThatFits("):bridge.index("func makeCoordinator")])
+
     def test_instrument_parent_does_not_override_child_identifiers(self):
         view = (ROOT / "SensorSynthFM/SensorFMTestView.swift").read_text()
         instrument = view[view.index("private var instrumentSurface"):view.index("private var performanceSurface")]

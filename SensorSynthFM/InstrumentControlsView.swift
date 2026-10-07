@@ -141,6 +141,14 @@ private struct InstrumentParameterSlider: UIViewRepresentable {
         slider.accessibilityIdentifier = identifier
     }
 
+    // An outer SwiftUI frame doesn't choose the represented UIKit control's size.
+    // Supply the layout contract so its actual bounds, hit area and AX frame agree.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISlider, context: Context) -> CGSize? {
+        let width = proposal.width.flatMap { $0.isFinite ? $0 : nil }
+            ?? uiView.sizeThatFits(.zero).width
+        return CGSize(width: max(0, width), height: 44)
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(owner: self) }
 
     final class Coordinator: NSObject {
