@@ -17,6 +17,14 @@ class PhysicalRepairContractTests(unittest.TestCase):
         self.assertIn("decaySeconds / log(100.0)", engine)
         self.assertIn("releaseSeconds / log(1000.0)", engine)
 
+    def test_parameter_slider_has_real_native_44_point_bounds(self):
+        view = (ROOT / "SensorSynthFM/InstrumentControlsView.swift").read_text()
+        self.assertIn("InstrumentParameterSlider(value:", view)
+        self.assertIn("func makeUIView(context: Context) -> UISlider", view)
+        self.assertIn(".frame(height: 44)", view)
+        self.assertNotIn("scaleEffect", view)
+        self.assertNotIn("accessibilityFrame", view)
+
     def test_instrument_parent_does_not_override_child_identifiers(self):
         view = (ROOT / "SensorSynthFM/SensorFMTestView.swift").read_text()
         instrument = view[view.index("private var instrumentSurface"):view.index("private var performanceSurface")]

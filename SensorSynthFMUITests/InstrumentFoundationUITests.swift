@@ -23,6 +23,7 @@ final class InstrumentFoundationUITests: XCTestCase {
             XCTAssertTrue(child.waitForExistence(timeout: 2), "Child ID must survive Instrument container: \(id)")
             XCTAssertEqual(child.identifier, id)
         }
+        XCTAssertGreaterThanOrEqual(element("instrument.audition.toggle").frame.height, 44)
         element("instrument.audition.toggle").tap()
         XCTAssertTrue(app.sliders["instrument.parameter.0"].isHittable)
         XCTAssertTrue(element("instrument.hidden.held.count").exists)
@@ -87,9 +88,11 @@ final class InstrumentFoundationUITests: XCTestCase {
         let bypass = element("instrument.filter.bypass")
         revealVertical(bypass, viewport: viewport, upward: false)
         XCTAssertTrue(contains(bypass, "Bypassed"))
+        XCTAssertGreaterThanOrEqual(bypass.frame.height, 44)
         bypass.tap()
         XCTAssertTrue(contains(bypass, "Enabled"))
         for mode in ["HP", "BP", "LP"] {
+            XCTAssertGreaterThanOrEqual(element("instrument.filter.mode.\(mode)").frame.height, 44)
             element("instrument.filter.mode.\(mode)").tap()
             XCTAssertTrue(contains(element("instrument.filter.mode.\(mode)"), "Selected"))
         }

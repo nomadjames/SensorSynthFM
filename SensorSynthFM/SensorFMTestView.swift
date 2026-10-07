@@ -361,11 +361,14 @@ struct SensorFMTestView: View {
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                         .accessibilityIdentifier("instrument.page.title")
                     Spacer()
-                    Button(showAudition ? "HIDE AUDITION" : "SHOW AUDITION") {
+                    Button {
                         cancelSurfaceTouches(reason: "audition visibility changed")
                         showAudition.toggle()
+                    } label: {
+                        Text(showAudition ? "HIDE AUDITION" : "SHOW AUDITION")
+                            .frame(minWidth: 132, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
-                    .frame(minWidth: 132, minHeight: 44)
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("instrument.audition.toggle")
                     .accessibilityValue(showAudition ? "Shown" : "Hidden")

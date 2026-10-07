@@ -1,5 +1,6 @@
 // Reachable sound editing controls. The same catalog/bridge drives the live engine and Matrix.
 import SwiftUI
+import UIKit
 
 struct InstrumentControlsView: View {
     @Bindable var bridge: SensorFMBridge
@@ -20,10 +21,13 @@ struct InstrumentControlsView: View {
                         .font(.system(size: 12, weight: .bold, design: .monospaced))
                     HStack(spacing: 8) {
                         ForEach(FilterMode.allCases) { mode in
-                            Button(mode.rawValue) {
+                            Button {
                                 bridge.setFilter(mode: mode, bypassed: bridge.filterBypassed)
+                            } label: {
+                                Text(mode.rawValue)
+                                    .frame(maxWidth: .infinity, minHeight: 44)
+                                    .contentShape(Rectangle())
                             }
-                            .frame(maxWidth: .infinity, minHeight: 44)
                             .background(bridge.filterMode == mode ? SynthColors.accent : SynthColors.surfaceRaised)
                             .foregroundColor(bridge.filterMode == mode ? SynthColors.background : SynthColors.textPrimary)
                             .cornerRadius(7)
@@ -31,10 +35,13 @@ struct InstrumentControlsView: View {
                             .accessibilityLabel(mode == .lowPass ? "Low pass" : mode == .highPass ? "High pass" : "Band pass")
                             .accessibilityValue(bridge.filterMode == mode ? "Selected" : "Not selected")
                         }
-                        Button(bridge.filterBypassed ? "BYPASSED" : "ENABLED") {
+                        Button {
                             bridge.setFilter(mode: bridge.filterMode, bypassed: !bridge.filterBypassed)
+                        } label: {
+                            Text(bridge.filterBypassed ? "BYPASSED" : "ENABLED")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                                .contentShape(Rectangle())
                         }
-                        .frame(maxWidth: .infinity, minHeight: 44)
                         .background(SynthColors.surfaceRaised)
                         .cornerRadius(7)
                         .accessibilityIdentifier("instrument.filter.bypass")
@@ -78,21 +85,56 @@ struct InstrumentControlsView: View {
                         Text(target.formatted(bridge.baseValue(for: target)))
                     }
                     .font(.system(size: 10, weight: .bold, design: .monospaced))
-                    Slider(value: Binding(
+                    InstrumentParameterSlider(value: Binding(
                         get: { target.normalised(bridge.baseValue(for: target)) },
                         set: { bridge.setBaseValue(target.denormalised($0), for: target) }
-                    ), in: 0...1)
-                    .frame(minHeight: 44)
-                    .tint(SynthColors.accent)
-                    .accessibilityLabel(target.label)
-                    .accessibilityValue(target.formatted(bridge.baseValue(for: target)))
-                    .accessibilityIdentifier("instrument.parameter.\(target.rawValue)")
+                    ), label: target.label,
+                       valueText: target.formatted(bridge.baseValue(for: target)),
+                       identifier: "instrument.parameter.\(target.rawValue)")
+                    .frame(height: 44)
                     Text("BASE \(target.formatted(bridge.baseValue(for: target))) · LIVE \(target.formatted(bridge.outputValue(for: target)))\(bridge.outputIsClamped(target) ? " · CLAMPED" : "")")
                         .font(.system(size: 9, design: .monospaced))
                         .foregroundColor(SynthColors.textSecondary)
                         .accessibilityIdentifier("instrument.readout.\(target.rawValue)")
                 }
             }
+        }
+    }
+}
+
+/// Give the native control itself 44-point bounds, not a 31-point SwiftUI Slider
+/// inside a larger layout frame. Track/thumb keep their standard UIKit sizes;
+/// hit testing and accessibility both use the real view bounds.
+private struct InstrumentParameterSlider: UIViewRepresentable {
+    @Binding var value: Double
+    let label: String
+    let valueText: String
+    let identifier: String
+
+    func makeUIView(context: Context) -> UISlider {
+        let slider = UISlider()
+        slider.minimumValue = 0
+        slider.maximumValue = 1
+        slider.minimumTrackTintColor = UIColor(SynthColors.accent)
+        slider.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)), for: .valueChanged)
+        return slider
+    }
+
+    func updateUIView(_ slider: UISlider, context: Context) {
+        context.coordinator.owner = self
+        slider.setValue(Float(value), animated: false)
+        slider.accessibilityLabel = label
+        slider.accessibilityValue = valueText
+        slider.accessibilityIdentifier = identifier
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(owner: self) }
+
+    final class Coordinator: NSObject {
+        var owner: InstrumentParameterSlider
+        init(owner: InstrumentParameterSlider) { self.owner = owner }
+        @objc func changed(_ slider: UISlider) {
+            owner.value = Double(slider.value)
         }
     }
 }
