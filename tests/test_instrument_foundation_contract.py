@@ -12,6 +12,84 @@ def source(name):
 
 
 class InstrumentFoundationContractTests(unittest.TestCase):
+    def test_candidate_factory_has_explicit_bases_and_only_three_routes(self):
+        import re
+        text = source("SensorModulationMatrix.swift")
+        factory = text.split("static func testStartingPatch()", 1)[1].split("func amount(", 1)[0]
+        self.assertIn("SensorModulationMatrix(seedDefaults: false)", factory)
+        bases = re.findall(r"setBaseValue\(([\d._]+), for: \.(\w+)\)", factory)
+        self.assertEqual({name: float(value.replace("_", "")) for value, name in bases}, {
+            "carrierFrequency": 440, "modulatorRatio": 2, "modulationIndex": 1,
+            "amplitude": .10, "ampAttack": .020, "ampDecay": .150, "ampSustain": .70,
+            "ampRelease": .350, "filterCutoff": 18000, "filterResonance": 0})
+        self.assertEqual(factory.count("setAmount("), 3)
+        for route in ("0.10, source: .accelMagnitude, target: .modulationIndex",
+                      "0.08, source: .micAmplitude, target: .amplitude",
+                      "0.5 / SensorModulationTarget.modulatorRatio.span, source: .gyroY, target: .modulatorRatio"):
+            self.assertIn(route, factory)
+        historical = subprocess.check_output(["git", "show", "6b89823:SensorSynthFM/SensorModulationMatrix.swift"], cwd=ROOT, text=True)
+        self.assertEqual(text.split("var defaultValue", 1)[1].split("var step", 1)[0],
+                         historical.split("var defaultValue", 1)[1].split("var step", 1)[0])
+        self.assertEqual(text.split("init(seedDefaults:", 1)[1].split("static func defaultMatrix", 1)[0],
+                         historical.split("init(seedDefaults:", 1)[1].split("static func defaultMatrix", 1)[0])
+
+    def test_candidate_bridge_launch_and_reset_share_factory(self):
+        bridge = source("SensorFMBridge.swift")
+        self.assertIn("var matrix = SensorModulationMatrix.testStartingPatch()", bridge)
+        self.assertIn("var output = SensorModulationMatrix.testStartingPatch().evaluate", bridge)
+        reset = bridge.split("func resetToStart()", 1)[1].split("func amount(", 1)[0]
+        for token in ("matrix = SensorModulationMatrix.testStartingPatch()",
+                      "setFilter(mode: .lowPass, bypassed: true)", "recalculateAndApply()"):
+            self.assertIn(token, reset)
+        for token in ("= 0.08", "= 0.12", "= 0.06", "preserveTouchPitch: performanceMode"):
+            self.assertIn(token, bridge)
+
+    def test_reset_rail_and_stale_scene_guard_preserve_note_policy(self):
+        view = source("SensorFMTestView.swift")
+        self.assertIn('railButton("RESET START", identifier: "performance.reset.start", active: false)', view)
+        reset = view.split("private func resetToStart()", 1)[1].split("private func cancelSurfaceTouches", 1)[0]
+        for token in ('releaseAllTouches(reason: "reset to start")', "setHoldEnabled(false)",
+                      "setPitchMode(.quantized)", "setOctaveOffset(0)", "showAudition = true",
+                      "sceneBaseApplicationEnabled = false", "bridge.resetToStart()"):
+            self.assertIn(token, reset)
+        self.assertNotIn("controlHand =", reset)
+        self.assertNotIn("showMatrix =", reset)
+        self.assertIn("guard sceneBaseApplicationEnabled, let key = currentSceneKey()", view)
+        listen = view.split('sceneButton("LISTEN 4S"', 1)[1].split('sceneButton(sceneAnalyzer', 1)[0]
+        regen = view.split("private func regenerateSceneBase()", 1)[1].split("private func setRegenFeedback", 1)[0]
+        self.assertIn("sceneBaseApplicationEnabled = true", listen)
+        self.assertIn("sceneBaseApplicationEnabled = true", regen)
+        self.assertIn("engine.releaseAllVoices()", view.split("private func releaseAllTouches", 1)[1])
+
+    def test_ui_hit_evidence_is_live_bounds_not_ax_threshold_or_constant(self):
+        view = source("InstrumentControlsView.swift")
+        probe = view.split("override var accessibilityValue", 1)[1].split("private struct InstrumentParameterSlider", 1)[0]
+        for token in ('"-ui-testing"', "bounds.width", "bounds.height", "bounds.minY + 1", "bounds.maxY - 1",
+                      "point(inside:", "super.accessibilityValue"):
+            self.assertIn(token, probe if token != '"-ui-testing"' else view)
+        self.assertNotIn("height: 44", probe)
+        ui = (ROOT / "SensorSynthFMUITests/InstrumentFoundationUITests.swift").read_text()
+        self.assertNotIn("slider.frame.height, 44", ui)
+        for token in ("assertNativeHitBounds(slider)", "XCTAssertGreaterThanOrEqual(height, 44)",
+                      '"upper=true"', '"lower=true"', "slider.isHittable", "adjust(toNormalizedSliderPosition:"):
+            self.assertIn(token, ui)
+        native = (ROOT / "SensorSynthFMTests/InstrumentFoundationTests.swift").read_text()
+        self.assertIn("sliderHitEvidenceFollowsRuntimeBoundsAndKeepsOrdinaryValue", native)
+        self.assertIn("resetStartingPatchRestoresEveryBaseRouteAndFilter", native)
+
+    def test_participant_copy_is_plain_without_changing_ids(self):
+        instrument = source("InstrumentControlsView.swift")
+        view = source("SensorFMTestView.swift")
+        for token in ("Your finger sets note pitch.", "Each note has its own fade in and fade out.", "Bypass turns the filter off, not its settings.", " · AT LIMIT"):
+            self.assertIn(token, instrument)
+        for token in ('Text("TURN AMOUNT UP")', 'Text("AT LIMIT")', 'Text("DETAILS")', 'sectionHeader("ROOM SOUND + MATRIX")', "TOUCHES DOWN", "SLIDES", "LIFTED"):
+            self.assertIn(token, view)
+        for name, text in (("InstrumentControlsView.swift", instrument), ("SensorFMTestView.swift", view)):
+            import re
+            old = subprocess.check_output(["git", "show", "6b89823:SensorSynthFM/" + name], cwd=ROOT, text=True)
+            ids = lambda value: set(re.findall(r'\.accessibilityIdentifier\(([^\n]+)\)', value))
+            self.assertEqual(ids(text), ids(old))
+
     def test_catalog_appends_targets_and_handles_nonfinite_log_cutoff(self):
         text = source("SensorModulationMatrix.swift")
         ordered = ["carrierFrequency", "modulatorRatio", "modulationIndex", "amplitude",

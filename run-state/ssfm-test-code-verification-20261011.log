@@ -1,0 +1,13 @@
+COMMAND: PYTHONDONTWRITEBYTECODE=1 python3 /home/james/.hermes/profiles/boddicker/cache/scratch/verify_ssfm_test_candidate_20261011.py
+PRESERVED SensorSynthFM.xcodeproj/project.pbxproj db91f8c8e2e67bfab4013d93cae3d25ca39f5a17584ca5db682a51cfd29948fc
+PRESERVED SensorSynthFM.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved 1de357f8a729fffd7c37667a97721e43413aec6d545297ecde3670d483858f3b
+PRESERVED SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-dark.png cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f
+PRESERVED SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-tinted.png 608feb705a28d87962161e7f075c246b83a834198aae969b3e314b68391e684d
+PRESERVED SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f
+PRESERVED SensorSynthFM/Assets.xcassets/AppIcon.appiconset/Contents.json 3753a8333b540a48a7693340a359f8ef76b79bfe0138b612b4b14fc2891b9731
+PRESERVED SensorSynthFMTests/InstrumentAudioRenderTests.swift e2d317b76733fa6bc00675b0b2b030c464b9f64d10b61fe61a52a68427b11917
+COPY AUDIT 22 before/after entries verified in original, source, docs and run-state
+COPY DIFF coverage verified
+BOUNDED SECRET SCAN 21 owned files, 6 credential patterns, 0 hits; not a universal secret guarantee
+PASS: preservation, scope, copy audit and bounded secret scan. Native tests remain pending.
+exit_code=0

@@ -46,7 +46,8 @@ struct SensorFMTestView: View {
     @State private var selectedSource: SensorModulationSource = .accelMagnitude
     @State private var selectedTarget: SensorModulationTarget = .modulationIndex
     @State private var appliedSceneKey: String?
-    @State private var regenFeedback = "GEN 0 · RATIO UNCHANGED"
+    @State private var sceneBaseApplicationEnabled = true
+    @State private var regenFeedback = "VERSION 0 · RATIO UNCHANGED"
     @State private var sceneDescriptorsExpanded = false
     @State private var showDiagnostics = false
     @State private var zeroDetentHapticTick = false
@@ -136,7 +137,7 @@ struct SensorFMTestView: View {
 
     private var portraitModulationSurface: some View {
         VStack(spacing: 0) {
-            sectionHeader("SCENE FINGERPRINT + MATRIX")
+            sectionHeader("ROOM SOUND + MATRIX")
             selectedCellEditor
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -199,16 +200,16 @@ struct SensorFMTestView: View {
     private var sceneFingerprintPanel: some View {
         let live = sceneAnalyzer.currentLiveFields
         let state = sceneAnalyzer.generatedState
-        let seedHash = sceneAnalyzer.candidateFingerprint.map { String($0.seedHash, radix: 16, uppercase: true) } ?? "NO SEED"
-        let stateLabel = sceneAnalyzer.candidateFingerprint == nil ? "SCENE PREVIEW" : "SCENE BASE"
+        let roomStatus = sceneAnalyzer.candidateFingerprint == nil ? "NOT CAPTURED" : "READY"
+        let stateLabel = sceneAnalyzer.candidateFingerprint == nil ? "ROOM PREVIEW" : "ROOM PATCH"
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("SCENE FINGERPRINT")
+                Text("ROOM SOUND")
                     .font(.system(size: 11, weight: .bold, design: .monospaced))
                     .foregroundColor(SynthColors.textPrimary)
                 Spacer()
-                Text(sceneAnalyzer.isListening ? "LISTENING \(Int(sceneAnalyzer.listenProgress * 100))%" : seedHash)
+                Text(sceneAnalyzer.isListening ? "LISTENING \(Int(sceneAnalyzer.listenProgress * 100))%" : roomStatus)
                     .font(.system(size: 8, weight: .semibold, design: .monospaced))
                     .foregroundColor(SynthColors.textSecondary)
                     .lineLimit(1)
@@ -216,6 +217,7 @@ struct SensorFMTestView: View {
 
             HStack(spacing: 8) {
                 sceneButton("LISTEN 4S", disabled: sceneAnalyzer.isListening) {
+                    sceneBaseApplicationEnabled = true
                     appliedSceneKey = nil
                     sceneAnalyzer.startListening()
                 }
@@ -259,7 +261,7 @@ struct SensorFMTestView: View {
                 }
                 .padding(.top, 4)
             } label: {
-                Text("SCENE DESCRIPTORS")
+                Text("ROOM DETAILS")
                     .font(.system(size: 9, weight: .bold, design: .monospaced))
                     .foregroundColor(SynthColors.textSecondary)
             }
@@ -286,7 +288,7 @@ struct SensorFMTestView: View {
                     .foregroundColor(SynthColors.sensorGreen)
             }
 
-            Text("FREEZE HOLDS SCENE DESCRIPTORS; RAW SENSOR ROUTING REMAINS LIVE.")
+            Text("FREEZE HOLDS ROOM SOUND; MOTION AND MIC ROUTES STAY LIVE.")
                 .font(.system(size: 8, weight: .semibold, design: .monospaced))
                 .foregroundColor(SynthColors.textSecondary)
         }
@@ -324,7 +326,7 @@ struct SensorFMTestView: View {
     }
 
     private func applySceneBaseIfNeeded() {
-        guard let key = currentSceneKey(), key != appliedSceneKey else { return }
+        guard sceneBaseApplicationEnabled, let key = currentSceneKey(), key != appliedSceneKey else { return }
         let oldRatio = bridge.baseValue(for: .modulatorRatio)
         bridge.applySceneBase(sceneAnalyzer.generatedState)
         appliedSceneKey = key
@@ -332,6 +334,7 @@ struct SensorFMTestView: View {
     }
 
     private func regenerateSceneBase() {
+        sceneBaseApplicationEnabled = true
         let oldRatio = bridge.baseValue(for: .modulatorRatio)
         let state = sceneAnalyzer.regenerate()
         bridge.applySceneBase(state)
@@ -342,7 +345,7 @@ struct SensorFMTestView: View {
     private func setRegenFeedback(oldRatio: Double) {
         let generation = sceneAnalyzer.candidateFingerprint?.mutationCounter ?? 0
         let changed = abs(oldRatio - sceneAnalyzer.generatedState.modulatorRatio) > 0.000_001
-        regenFeedback = "GEN \(generation) · \(changed ? "RATIO CHANGED" : "RATIO UNCHANGED")"
+        regenFeedback = "VERSION \(generation) · \(changed ? "RATIO CHANGED" : "RATIO UNCHANGED")"
     }
 
     private func currentSceneKey() -> String? {
@@ -483,7 +486,7 @@ struct SensorFMTestView: View {
                                 .position(point)
                                 .opacity(indicator.opacity(at: timeline.date))
                                 .accessibilityElement(children: .ignore)
-                                .accessibilityLabel("RELEASED envelope voice \(indicator.voiceID + 1)")
+                                .accessibilityLabel("FADING note voice \(indicator.voiceID + 1)")
                                 .accessibilityValue(feedback.label)
                         }
                     }
@@ -522,16 +525,16 @@ struct SensorFMTestView: View {
             .accessibilityIdentifier("performance.note.surface.container")
 
             HStack(spacing: 8) {
-                Text("ACTIVE HALOS · RELEASED ENVELOPES · HELD EDGE MARKERS")
+                Text("ACTIVE HALOS · FADING NOTES · HELD EDGE MARKERS")
                 Spacer(minLength: 0)
-                Text("SENSOR TIMBRE UNDERLAY: \(Int((bridge.performanceTimbreAmount * 100).rounded()))%")
+                Text("SENSOR SOUND CHANGE: \(Int((bridge.performanceTimbreAmount * 100).rounded()))%")
                     .accessibilityIdentifier("performance.sensor.timbre")
             }
             .font(.system(size: 9, weight: .bold, design: .monospaced))
             .foregroundColor(SynthColors.textSecondary)
             .accessibilityElement(children: .combine)
             .accessibilityIdentifier("performance.feedback.legend")
-            .accessibilityLabel("ACTIVE HALOS · RELEASED ENVELOPES · HELD EDGE MARKERS")
+            .accessibilityLabel("ACTIVE HALOS · FADING NOTES · HELD EDGE MARKERS")
 
             Text(touchDiagnosticText)
                 .font(.system(size: 8, weight: .bold, design: .monospaced))
@@ -571,7 +574,7 @@ struct SensorFMTestView: View {
         } else {
             changed = false
         }
-        return "TOUCH B\(beganTouchCount) M\(movedTouchCount) R\(releasedTouchCount) · LAST \(lastTouchEvent) · PITCH \(first)→\(last) · PITCH CHANGED \(changed ? "YES" : "NO")"
+        return "TOUCHES DOWN \(beganTouchCount) · SLIDES \(movedTouchCount) · LIFTED \(releasedTouchCount) · LAST \(lastTouchEvent) · PITCH \(first)→\(last) · PITCH CHANGED \(changed ? "YES" : "NO")"
     }
 
     private var controlRail: some View {
@@ -613,6 +616,9 @@ struct SensorFMTestView: View {
 
             railButton("RELEASE ALL", identifier: "performance.release.touches", active: false) {
                 releaseAllTouches(reason: "manual release")
+            }
+            railButton("RESET START", identifier: "performance.reset.start", active: false) {
+                resetToStart()
             }
             railButton("MATRIX", identifier: "performance.matrix", active: false) {
                 enterMatrixMode()
@@ -740,6 +746,19 @@ struct SensorFMTestView: View {
         bridge.performanceMode = true
         showMatrix = false
         showInstrument = true
+    }
+
+    private func resetToStart() {
+        releaseAllTouches(reason: "reset to start")
+        setHoldEnabled(false)
+        setPitchMode(.quantized)
+        setOctaveOffset(0)
+        showAudition = true
+        // A pending listen or old candidate must not replace the restored patch.
+        // Only a new explicit LISTEN or REGEN resumes scene-base application.
+        sceneBaseApplicationEnabled = false
+        appliedSceneKey = currentSceneKey()
+        bridge.resetToStart()
     }
 
     private func cancelSurfaceTouches(reason: String) {
@@ -1020,7 +1039,7 @@ struct SensorFMTestView: View {
             ? signedPercent(amount)
             : "\(signedPercent(amount)) · \(stateText)"
         let activationHint = selected && !active
-            ? "Selected but neutral. Adjust amount to activate this route"
+            ? "Selected but neutral. Turn the amount up to hear this route"
             : (active ? "Active route. Double-tap to remove" : "Select this modulation route")
 
         return Button {
@@ -1036,7 +1055,7 @@ struct SensorFMTestView: View {
                         .font(.system(size: 7, weight: .bold, design: .monospaced))
                         .foregroundColor(SynthColors.textPrimary)
                         .minimumScaleFactor(0.7)
-                    Text("ADJUST TO ACTIVATE")
+                    Text("TURN AMOUNT UP")
                         .font(.system(size: 6, weight: .bold, design: .monospaced))
                         .foregroundColor(SynthColors.textPrimary)
                         .minimumScaleFactor(0.65)
@@ -1151,7 +1170,7 @@ struct SensorFMTestView: View {
                 Spacer()
                 Text("LIVE \(format(selectedTarget, bridge.outputValue(for: selectedTarget)))")
                 if bridge.outputIsClamped(selectedTarget) {
-                    Text("CLAMPED")
+                    Text("AT LIMIT")
                         .foregroundColor(Color.red.opacity(0.9))
                 }
             }
@@ -1261,7 +1280,7 @@ struct SensorFMTestView: View {
                 Spacer()
                 Text("LIVE \(format(target, bridge.outputValue(for: target)))")
                 if bridge.outputIsClamped(target) {
-                    Text("CLAMPED")
+                    Text("AT LIMIT")
                         .foregroundColor(Color.red.opacity(0.9))
                 }
             }
@@ -1300,7 +1319,7 @@ struct SensorFMTestView: View {
         Button {
             showDiagnostics = true
         } label: {
-            Text("DIAG")
+            Text("DETAILS")
                 .font(.system(size: 12, weight: .bold, design: .monospaced))
                 .foregroundColor(SynthColors.background)
                 .frame(maxWidth: .infinity, minHeight: 44)
@@ -1308,7 +1327,7 @@ struct SensorFMTestView: View {
                 .cornerRadius(8)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Diagnostics")
+        .accessibilityLabel("Details")
     }
 
     private var diagnosticsSheet: some View {

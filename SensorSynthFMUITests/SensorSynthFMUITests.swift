@@ -144,8 +144,8 @@ final class SensorSynthFMUITests: XCTestCase {
         start.press(forDuration: 0.1, thenDragTo: destination)
 
         let lifecycle = element(withIdentifier: "performance.touch.lifecycle")
-        XCTAssertTrue(waitForValueContaining(lifecycle, "TOUCH B1 M"))
-        XCTAssertTrue(waitForValueContaining(lifecycle, "R1"))
+        XCTAssertTrue(waitForValueContaining(lifecycle, "TOUCHES DOWN 1 · SLIDES"))
+        XCTAssertTrue(waitForValueContaining(lifecycle, "LIFTED 1"))
         XCTAssertTrue(waitForValueContaining(lifecycle, "PITCH CHANGED YES"))
         XCTAssertTrue(
             waitForValueContaining(element(withIdentifier: "performance.active.voice.count"), "VOICES 0/10")

@@ -17,7 +17,7 @@ final class SensorFMBridge {
 
     // MARK: - Matrix
 
-    var matrix = SensorModulationMatrix.defaultMatrix()
+    var matrix = SensorModulationMatrix.testStartingPatch()
 
     /// Performance mode keeps touch pitch authoritative and exposes only a
     /// bounded, labeled timbral underlay. Matrix mode preserves full routing.
@@ -54,7 +54,7 @@ final class SensorFMBridge {
     private(set) var smoothedMicAmp: Double = 0.0
     private(set) var smoothedGyroY: Double = 0.5
     private(set) var sourceValues = SensorModulationSourceValues()
-    private(set) var output = SensorModulationMatrix.defaultMatrix().evaluate(sources: SensorModulationSourceValues())
+    private(set) var output = SensorModulationMatrix.testStartingPatch().evaluate(sources: SensorModulationSourceValues())
 
     // MARK: - Dependencies (injected)
 
@@ -99,6 +99,12 @@ final class SensorFMBridge {
     deinit { stop() }
 
     // MARK: - Matrix editing
+
+    func resetToStart() {
+        matrix = SensorModulationMatrix.testStartingPatch()
+        setFilter(mode: .lowPass, bypassed: true)
+        recalculateAndApply()
+    }
 
     func amount(source: SensorModulationSource, target: SensorModulationTarget) -> Double {
         matrix.amount(source: source, target: target)

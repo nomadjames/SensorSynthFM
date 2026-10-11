@@ -80,7 +80,7 @@ class ReviewRepairContractTests(unittest.TestCase):
         self.assertIn('"QUANTIZED"', self.ui)
         self.assertIn('"MIDI 72–84"', self.ui)
         self.assertIn('"MIDI 60–72"', self.ui)
-        for evidence in ("TOUCH B1 M", "R1", "PITCH CHANGED YES"):
+        for evidence in ("TOUCHES DOWN 1 · SLIDES", "LIFTED 1", "PITCH CHANGED YES"):
             self.assertIn(evidence, self.ui)
         self.assertIn("performance.touch.lifecycle", self.view)
         self.assertIn("performance.pitch.mode", self.view)

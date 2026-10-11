@@ -1,0 +1,94 @@
+{
+  "SensorSynthFM/InstrumentControlsView.swift": [
+    [
+      "Touch pitch stays authoritative. Carrier base drives the legacy Matrix audition note only.",
+      "Your finger sets note pitch. Carrier frequency sets the Matrix test tone."
+    ],
+    [
+      "One envelope per note. Release time is captured on note-off; editing a tail never retriggers it.",
+      "Each note has its own fade in and fade out. Release changes apply to the next note you let go."
+    ],
+    [
+      "Cutoff is logarithmic (center in BP). Resonance: LP/HP 0…+6 dB; BP bandwidth 2400…300 cents. Bypass leaves routes editable but inaudible.",
+      "Lower the low-pass cutoff for a darker sound. Resonance emphasizes the cutoff. Bypass turns the filter off, not its settings."
+    ],
+    [
+      "BASE \\(target.formatted(bridge.baseValue(for: target))) · LIVE \\(target.formatted(bridge.outputValue(for: target)))\\(bridge.outputIsClamped(target) ? \" · CLAMPED\" : \"\")",
+      "BASE \\(target.formatted(bridge.baseValue(for: target))) · LIVE \\(target.formatted(bridge.outputValue(for: target)))\\(bridge.outputIsClamped(target) ? \" · AT LIMIT\" : \"\")"
+    ]
+  ],
+  "SensorSynthFM/SensorFMTestView.swift": [
+    [
+      "GEN 0 · RATIO UNCHANGED",
+      "VERSION 0 · RATIO UNCHANGED"
+    ],
+    [
+      "SCENE FINGERPRINT + MATRIX",
+      "ROOM SOUND + MATRIX"
+    ],
+    [
+      "SCENE FINGERPRINT",
+      "ROOM SOUND"
+    ],
+    [
+      "SCENE PREVIEW",
+      "ROOM PREVIEW"
+    ],
+    [
+      "SCENE BASE",
+      "ROOM PATCH"
+    ],
+    [
+      "SCENE DESCRIPTORS",
+      "ROOM DETAILS"
+    ],
+    [
+      "FREEZE HOLDS SCENE DESCRIPTORS; RAW SENSOR ROUTING REMAINS LIVE.",
+      "FREEZE HOLDS ROOM SOUND; MOTION AND MIC ROUTES STAY LIVE."
+    ],
+    [
+      "GEN \\(generation) · \\(changed ? \"RATIO CHANGED\" : \"RATIO UNCHANGED\")",
+      "VERSION \\(generation) · \\(changed ? \"RATIO CHANGED\" : \"RATIO UNCHANGED\")"
+    ],
+    [
+      "ACTIVE HALOS · RELEASED ENVELOPES · HELD EDGE MARKERS",
+      "ACTIVE HALOS · FADING NOTES · HELD EDGE MARKERS"
+    ],
+    [
+      "RELEASED envelope voice \\(indicator.voiceID + 1)",
+      "FADING note voice \\(indicator.voiceID + 1)"
+    ],
+    [
+      "SENSOR TIMBRE UNDERLAY: \\(Int((bridge.performanceTimbreAmount * 100).rounded()))%",
+      "SENSOR SOUND CHANGE: \\(Int((bridge.performanceTimbreAmount * 100).rounded()))%"
+    ],
+    [
+      "TOUCH B\\(beganTouchCount) M\\(movedTouchCount) R\\(releasedTouchCount) · LAST \\(lastTouchEvent) · PITCH \\(first)→\\(last) · PITCH CHANGED \\(changed ? \"YES\" : \"NO\")",
+      "TOUCHES DOWN \\(beganTouchCount) · SLIDES \\(movedTouchCount) · LIFTED \\(releasedTouchCount) · LAST \\(lastTouchEvent) · PITCH \\(first)→\\(last) · PITCH CHANGED \\(changed ? \"YES\" : \"NO\")"
+    ],
+    [
+      "Selected but neutral. Adjust amount to activate this route",
+      "Selected but neutral. Turn the amount up to hear this route"
+    ],
+    [
+      "ADJUST TO ACTIVATE",
+      "TURN AMOUNT UP"
+    ],
+    [
+      "CLAMPED",
+      "AT LIMIT"
+    ],
+    [
+      "DIAG",
+      "DETAILS"
+    ],
+    [
+      "Diagnostics",
+      "Details"
+    ],
+    [
+      "NO SEED / uppercase hexadecimal seedHash (status expression)",
+      "NOT CAPTURED / READY"
+    ]
+  ]
+}

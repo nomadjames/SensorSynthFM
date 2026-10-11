@@ -1,0 +1,37 @@
+{
+  "SensorSynthFM.xcodeproj/project.pbxproj": {
+    "worktree": "db91f8c8e2e67bfab4013d93cae3d25ca39f5a17584ca5db682a51cfd29948fc",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "db91f8c8e2e67bfab4013d93cae3d25ca39f5a17584ca5db682a51cfd29948fc",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "db91f8c8e2e67bfab4013d93cae3d25ca39f5a17584ca5db682a51cfd29948fc"
+  },
+  "SensorSynthFM.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved": {
+    "worktree": "1de357f8a729fffd7c37667a97721e43413aec6d545297ecde3670d483858f3b",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "1de357f8a729fffd7c37667a97721e43413aec6d545297ecde3670d483858f3b",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "1de357f8a729fffd7c37667a97721e43413aec6d545297ecde3670d483858f3b"
+  },
+  "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-dark.png": {
+    "worktree": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f"
+  },
+  "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024-tinted.png": {
+    "worktree": "608feb705a28d87962161e7f075c246b83a834198aae969b3e314b68391e684d",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "608feb705a28d87962161e7f075c246b83a834198aae969b3e314b68391e684d",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "608feb705a28d87962161e7f075c246b83a834198aae969b3e314b68391e684d"
+  },
+  "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png": {
+    "worktree": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "cfea8beb967ffbec774c5b498f0362363a25a9f4c7f8c55a27eae27ab756811f"
+  },
+  "SensorSynthFM/Assets.xcassets/AppIcon.appiconset/Contents.json": {
+    "worktree": "3753a8333b540a48a7693340a359f8ef76b79bfe0138b612b4b14fc2891b9731",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "3753a8333b540a48a7693340a359f8ef76b79bfe0138b612b4b14fc2891b9731",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "3753a8333b540a48a7693340a359f8ef76b79bfe0138b612b4b14fc2891b9731"
+  },
+  "SensorSynthFMTests/InstrumentAudioRenderTests.swift": {
+    "worktree": "e2d317b76733fa6bc00675b0b2b030c464b9f64d10b61fe61a52a68427b11917",
+    "6b8982331a1da6eb647d4b5a930cfa8ebd5f184f": "e2d317b76733fa6bc00675b0b2b030c464b9f64d10b61fe61a52a68427b11917",
+    "a28a0203475500ce2029fc6195b2733d10bb63f9": "absent"
+  }
+}

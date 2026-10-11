@@ -27,6 +27,39 @@ struct SensorModulationMatrixTests {
         }
     }
 
+    // Candidate tests authored on Linux; native execution remains pending.
+    @Test func testStartingPatchHasExactBasesAndOnlyAcceptedConservativeRoutes() {
+        let matrix = SensorModulationMatrix.testStartingPatch()
+        let expectedBases: [Double] = [440, 2, 1, 0.10, 0.020, 0.150, 0.70, 0.350, 18_000, 0]
+        for target in SensorModulationTarget.allCases {
+            #expect(close(matrix.baseValue(for: target), expectedBases[target.rawValue]))
+            for source in SensorModulationSource.allCases {
+                let expected: Double
+                switch (source, target) {
+                case (.accelMagnitude, .modulationIndex): expected = 0.10
+                case (.micAmplitude, .amplitude): expected = 0.08
+                case (.gyroY, .modulatorRatio): expected = 0.02512562814070352
+                default: expected = 0
+                }
+                #expect(close(matrix.amount(source: source, target: target), expected))
+            }
+        }
+        for input in [0.0, 0.5, 1.0] {
+            var sources = SensorModulationSourceValues()
+            sources.accelMagnitude = input
+            sources.micAmplitude = input
+            sources.gyroY = input
+            let output = matrix.evaluate(sources: sources)
+            #expect(close(output.modulationIndex, 1 + input))
+            #expect(close(output.amplitude, 0.10 + input * 0.08))
+            #expect(close(output.modulatorRatio, 1.5 + input))
+            #expect(close(output.carrierFrequency, 440))
+            for target in SensorModulationTarget.allCases {
+                #expect(!output.isClamped(target))
+            }
+        }
+    }
+
     @Test func nonDefaultSourceCanRouteToEachTarget() {
         for target in SensorModulationTarget.allCases {
             var matrix = SensorModulationMatrix(seedDefaults: false)

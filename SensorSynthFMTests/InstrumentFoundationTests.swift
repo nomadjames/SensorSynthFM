@@ -75,6 +75,94 @@ struct InstrumentFoundationTests {
         #expect(slider.accessibilityFrame.height == 44)
     }
 
+    // Candidate tests authored on Linux; native execution remains pending.
+    @Test func sliderHitEvidenceFollowsRuntimeBoundsAndKeepsOrdinaryValue() throws {
+        let slider = InstrumentUISlider(frame: CGRect(x: 0, y: 0, width: 240, height: 44))
+        slider.reportsHitBoundsForTesting = false
+        slider.accessibilityValue = "20 ms"
+        #expect(slider.accessibilityValue == "20 ms")
+        slider.reportsHitBoundsForTesting = true
+        let initial = try #require(slider.accessibilityValue)
+        #expect(initial.contains("width=240.0 height=44.0 upper=true lower=true"))
+        slider.bounds = CGRect(x: 3, y: 5, width: 300, height: 60)
+        let resized = try #require(slider.accessibilityValue)
+        #expect(resized.contains("width=300.0 height=60.0 upper=true lower=true"))
+        #expect(initial != resized)
+        slider.bounds = .zero
+        let empty = try #require(slider.accessibilityValue)
+        #expect(empty.contains("height=0.0 upper=false lower=false"))
+        slider.reportsHitBoundsForTesting = false
+        #expect(slider.accessibilityValue == "20 ms")
+    }
+
+    @Test func resetStartingPatchRestoresEveryBaseRouteAndFilter() {
+        let sink = InstrumentRecordingSink()
+        let bridge = SensorFMBridge(parameterSink: sink)
+        let expected = SensorModulationMatrix.testStartingPatch()
+        #expect(bridge.matrix == expected)
+        #expect(bridge.output == expected.evaluate(sources: SensorModulationSourceValues()))
+        bridge.performanceMode = true
+        for target in SensorModulationTarget.allCases {
+            bridge.setBaseValue(target.denormalised(0.4), for: target)
+            for source in SensorModulationSource.allCases {
+                bridge.setAmount(-0.3, source: source, target: target)
+            }
+        }
+        bridge.setFilter(mode: .bandPass, bypassed: false)
+        let before = sink.frames
+        bridge.resetToStart()
+        #expect(bridge.matrix == expected)
+        #expect(bridge.output == expected.evaluate(sources: bridge.sourceValues))
+        #expect(sink.lastOutput == bridge.output)
+        #expect(sink.frames == before + 1)
+        #expect(bridge.filterMode == .lowPass && bridge.filterBypassed)
+        #expect(sink.filterMode == .lowPass && sink.filterBypassed)
+        #expect(bridge.performanceMode && sink.preserveTouchPitch)
+        #expect(bridge.accelSmoothingAlpha == 0.08)
+        #expect(bridge.micSmoothingAlpha == 0.12)
+        #expect(bridge.gyroSmoothingAlpha == 0.06)
+    }
+
+    @Test func resetPanicSilencesHeldReleasingAndLegacyAuditionVoices() throws {
+        let state = NoteEntryState()
+        let engine = FMEngine()
+        defer { engine.stop() }
+        let bridge = SensorFMBridge(parameterSink: engine)
+        bridge.performanceMode = true
+        state.setHoldEnabled(true)
+        _ = state.setMode(.freehand)
+        _ = state.setOctaveOffset(2)
+        let held = try #require(state.beginTouch(id: "held-reset", normalizedY: 0.9))
+        engine.noteOn(voiceID: held.voiceID, frequency: held.target.frequency)
+        _ = state.endTouch(id: "held-reset")
+        let active = try #require(state.beginTouch(id: "active-reset", normalizedY: 0.2))
+        engine.noteOn(voiceID: active.voiceID, frequency: active.target.frequency)
+        engine.noteOff(voiceID: active.voiceID)
+        let token = try #require(engine.diagnostics(voiceID: active.voiceID)).generation
+        // Same ordered primitives as the production rail; UI test covers the wiring.
+        _ = state.releaseAll(reason: "reset to start")
+        engine.releaseAllVoices()
+        _ = state.setHoldEnabled(false)
+        _ = state.setMode(.quantized)
+        _ = state.setOctaveOffset(0)
+        bridge.resetToStart()
+        engine.completeRelease(voiceID: active.voiceID, generation: token)
+        #expect(state.activeAndHeldVoiceCount == 0 && state.releasedIndicators.isEmpty)
+        #expect(!state.isHoldEnabled && state.mode == .quantized && state.octaveOffset == 0)
+        #expect(engine.activeVoiceCount == 0 && !engine.isPlaying)
+        for id in 0..<FMEngine.voiceCapacity {
+            let voice = try #require(engine.diagnostics(voiceID: id))
+            #expect(!voice.isActive && !voice.isReleasing && !voice.oscillatorStarted)
+            #expect(voice.enabledFilters == [false, false, false])
+        }
+        bridge.performanceMode = false
+        engine.noteOn() // Existing Matrix audition API shares the bank/panic.
+        #expect(engine.isPlaying)
+        engine.releaseAllVoices()
+        bridge.resetToStart()
+        #expect(!engine.isPlaying && engine.activeVoiceCount == 0)
+    }
+
     @Test func nativeStageEndpointsMatchSelectedDurations() throws {
         let engine = FMEngine()
         defer { engine.stop() }

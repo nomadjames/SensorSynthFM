@@ -78,8 +78,8 @@ class SensorFMTestViewLayoutTests(unittest.TestCase):
         cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])
 
         self.assertIn('Text("SELECTED · NEUTRAL")', cell)
-        self.assertIn('Text("ADJUST TO ACTIVATE")', cell)
-        self.assertIn('Selected but neutral. Adjust amount to activate this route', cell)
+        self.assertIn('Text("TURN AMOUNT UP")', cell)
+        self.assertIn('Selected but neutral. Turn the amount up to hear this route', cell)
 
     def test_current_grid_uses_56_point_cells_with_scroll_fallback_and_labels(self) -> None:
         cell = re.sub(r"\s+", " ", self.source[self.source.index("private func matrixCell"):self.source.index("private var selectedCellEditor")])

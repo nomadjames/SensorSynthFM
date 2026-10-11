@@ -196,6 +196,25 @@ struct SensorModulationMatrix: Equatable {
         setAmount(3.75 / SensorModulationTarget.modulatorRatio.span, source: .gyroY, target: .modulatorRatio)
     }
     static func defaultMatrix() -> SensorModulationMatrix { SensorModulationMatrix() }
+
+    /// One baked participant starting patch; historical defaults remain available.
+    static func testStartingPatch() -> SensorModulationMatrix {
+        var matrix = SensorModulationMatrix(seedDefaults: false)
+        matrix.setBaseValue(440, for: .carrierFrequency)
+        matrix.setBaseValue(2.0, for: .modulatorRatio)
+        matrix.setBaseValue(1.0, for: .modulationIndex)
+        matrix.setBaseValue(0.10, for: .amplitude)
+        matrix.setBaseValue(0.020, for: .ampAttack)
+        matrix.setBaseValue(0.150, for: .ampDecay)
+        matrix.setBaseValue(0.70, for: .ampSustain)
+        matrix.setBaseValue(0.350, for: .ampRelease)
+        matrix.setBaseValue(18_000, for: .filterCutoff)
+        matrix.setBaseValue(0.0, for: .filterResonance)
+        matrix.setAmount(0.10, source: .accelMagnitude, target: .modulationIndex)
+        matrix.setAmount(0.08, source: .micAmplitude, target: .amplitude)
+        matrix.setAmount(0.5 / SensorModulationTarget.modulatorRatio.span, source: .gyroY, target: .modulatorRatio)
+        return matrix
+    }
     func amount(source: SensorModulationSource, target: SensorModulationTarget) -> Double {
         amounts[index(source: source, target: target)]
     }

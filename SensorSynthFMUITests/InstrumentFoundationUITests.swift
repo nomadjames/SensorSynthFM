@@ -78,7 +78,8 @@ final class InstrumentFoundationUITests: XCTestCase {
             let slider = app.sliders["instrument.parameter.\(id)"]
             revealVertical(slider, viewport: viewport)
             XCTAssertTrue(slider.isHittable, "Catalog parameter \(id) should be reachable")
-            XCTAssertGreaterThanOrEqual(slider.frame.height, 44)
+            // Known iPadOS AX frame is 34pt; assert real native hit bounds, not AX repair.
+            try assertNativeHitBounds(slider)
             let old = slider.value as? String
             slider.adjust(toNormalizedSliderPosition: 0.4)
             XCTAssertNotEqual(slider.value as? String, old, "Editing parameter \(id) must change base value")
@@ -148,6 +149,99 @@ final class InstrumentFoundationUITests: XCTestCase {
         element("matrix.instrument").tap()
         XCTAssertTrue(contains(element("performance.active.voice.count"), "VOICES 0/10"))
         XCTAssertTrue(element("performance.release.touches").isHittable)
+    }
+
+    // Candidate tests authored on Linux; native execution remains pending.
+    @MainActor
+    func testResetStartRestoresPatchHoldPitchAndAuditionForBothHands() throws {
+        XCTAssertTrue(element("performance.reset.start").waitForExistence(timeout: 5))
+        for hand in ["left", "right"] {
+            element("performance.hand.\(hand)").tap()
+            element("performance.pitch.freehand").tap()
+            element("performance.octave.up").tap()
+            element("performance.hold").tap()
+            element("performance.note.surface.container")
+                .coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8)).press(forDuration: 0.1)
+            XCTAssertTrue(contains(element("performance.active.voice.count"), "VOICES 1/10"))
+            element("performance.instrument").tap()
+            element("instrument.audition.toggle").tap()
+            let viewport = element("instrument.controls.viewport")
+            let ratio = app.sliders["instrument.parameter.1"]
+            revealVertical(ratio, viewport: viewport, upward: false)
+            ratio.adjust(toNormalizedSliderPosition: 0.4)
+            let bypass = element("instrument.filter.bypass")
+            revealVertical(bypass, viewport: viewport)
+            bypass.tap()
+            XCTAssertTrue(contains(bypass, "Enabled"))
+            let reset = element("performance.reset.start")
+            XCTAssertTrue(reset.isHittable)
+            XCTAssertGreaterThanOrEqual(reset.frame.height, 44)
+            XCTAssertGreaterThanOrEqual(reset.frame.width, 44)
+            reset.tap()
+            XCTAssertTrue(contains(element("performance.hold"), "Disabled"))
+            XCTAssertTrue(contains(element("performance.pitch.mode"), "QUANTIZED"))
+            XCTAssertTrue(contains(element("performance.pitch.range"), "MIDI 60–72"))
+            XCTAssertTrue(contains(element("performance.active.voice.count"), "VOICES 0/10"))
+            XCTAssertTrue(contains(element("instrument.audition.toggle"), "Shown"))
+            revealVertical(bypass, viewport: viewport)
+            XCTAssertTrue(contains(bypass, "Bypassed"))
+            XCTAssertTrue(contains(element("instrument.filter.mode.LP"), "Selected"))
+            let expected = ["440 Hz", "2.00:1", "1.00", "10%", "20 ms", "150 ms", "70%", "350 ms", "18000 Hz", "0%"]
+            for id in 0..<10 {
+                let slider = app.sliders["instrument.parameter.\(id)"]
+                revealVertical(slider, viewport: viewport, upward: id != 0)
+                XCTAssertTrue(contains(slider, expected[id]))
+            }
+            XCTAssertTrue(element("instrument.page.title").exists, "Reset keeps current page")
+            if hand == "left" {
+                XCTAssertLessThan(element("performance.control.rail").frame.minX,
+                                  element("performance.note.surface.container").frame.minX)
+            } else {
+                XCTAssertGreaterThan(element("performance.control.rail").frame.minX,
+                                     element("performance.note.surface.container").frame.minX)
+            }
+            element("instrument.performance").tap()
+            element("performance.matrix").tap()
+            let accel = element("modulation.cell.source.0.target.2")
+            XCTAssertTrue(contains(accel, "+10%"))
+            let mic = element("modulation.cell.source.1.target.3")
+            XCTAssertTrue(contains(mic, "+8%"))
+            let gyro = element("modulation.cell.source.2.target.1")
+            XCTAssertTrue(contains(gyro, "+3%")) // Existing percent formatter rounds display only.
+            element("performance.return").tap()
+        }
+    }
+
+    @MainActor
+    func testRelaunchStartsWithCuratedPatchAndPlainCopy() throws {
+        XCTAssertTrue(element("performance.instrument").waitForExistence(timeout: 5))
+        element("performance.instrument").tap()
+        let ratio = app.sliders["instrument.parameter.1"]
+        ratio.adjust(toNormalizedSliderPosition: 0.4)
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(element("performance.instrument").waitForExistence(timeout: 5))
+        element("performance.instrument").tap()
+        XCTAssertTrue(contains(app.sliders["instrument.parameter.1"], "2.00:1"))
+        XCTAssertTrue(app.staticTexts["Your finger sets note pitch. Carrier frequency sets the Matrix test tone."].exists)
+        element("performance.matrix").tap()
+        XCTAssertTrue(app.staticTexts["ROOM SOUND"].exists)
+        XCTAssertTrue(app.buttons["Details"].exists)
+    }
+
+    @MainActor
+    private func assertNativeHitBounds(_ slider: XCUIElement) throws {
+        let value = try XCTUnwrap(slider.value as? String)
+        let evidence = try XCTUnwrap(value.components(separatedBy: " | HIT_BOUNDS ").last)
+        let fields = evidence.split(separator: " ").map(String.init)
+        let heightText = try XCTUnwrap(fields.first { $0.hasPrefix("height=") })
+        let widthText = try XCTUnwrap(fields.first { $0.hasPrefix("width=") })
+        let height = try XCTUnwrap(Double(heightText.dropFirst("height=".count)))
+        let width = try XCTUnwrap(Double(widthText.dropFirst("width=".count)))
+        XCTAssertGreaterThanOrEqual(height, 44)
+        XCTAssertGreaterThanOrEqual(width, 44)
+        XCTAssertTrue(fields.contains("upper=true"))
+        XCTAssertTrue(fields.contains("lower=true"))
     }
 
     @MainActor
